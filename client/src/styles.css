@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #030712;
+    color: #f3f4f6;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+}
+
+@layer components {
+  .card-glow-red    { box-shadow: 0 0 12px -4px theme(colors.red.700);    }
+  .card-glow-amber  { box-shadow: 0 0 12px -4px theme(colors.amber.700);  }
+  .card-glow-purple { box-shadow: 0 0 12px -4px theme(colors.purple.700); }
+  .card-glow-blue   { box-shadow: 0 0 12px -4px theme(colors.blue.700);   }
+  .card-glow-green  { box-shadow: 0 0 12px -4px theme(colors.green.700);  }
+}

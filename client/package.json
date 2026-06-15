@@ -1,0 +1,46 @@
+{
+  "name": "@munchkin/client",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "ng serve --port 4200",
+    "build": "ng build",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@angular/animations": "^21.0.0",
+    "@angular/cdk": "^21.2.14",
+    "@angular/common": "^21.0.0",
+    "@angular/compiler": "^21.0.0",
+    "@angular/core": "^21.0.0",
+    "@angular/forms": "^21.0.0",
+    "@angular/platform-browser": "^21.0.0",
+    "@angular/router": "^21.0.0",
+    "@munchkin/shared": "*",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.15",
+    "rxjs": "^7.8.0",
+    "socket.io-client": "^4.8.1",
+    "tailwindcss": "^4.3.1",
+    "tslib": "^2.8.0"
+  },
+  "devDependencies": {
+    "@analogjs/vite-plugin-angular": "^1.22.5",
+    "@angular-eslint/builder": "^21.0.0",
+    "@angular-eslint/eslint-plugin": "^21.0.0",
+    "@angular-eslint/eslint-plugin-template": "^21.0.0",
+    "@angular-eslint/template-parser": "^21.0.0",
+    "@angular/build": "^21.0.0",
+    "@angular/cli": "^21.0.0",
+    "@angular/compiler-cli": "^21.0.0",
+    "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "^4.0.0",
+    "angular-eslint": "^21.0.0",
+    "jsdom": "^25.0.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.20.0",
+    "vitest": "^4.0.0"
+  }
+}

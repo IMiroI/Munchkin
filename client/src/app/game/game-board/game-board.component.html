@@ -1,0 +1,201 @@
+<div class="h-screen overflow-hidden bg-gray-950 text-gray-100 grid"
+     style="grid-template-rows: 52px 1fr 216px; grid-template-columns: 1fr 268px;">
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- ACTION LOG — top full-width bar                                        -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <header class="col-span-2 flex items-center gap-3 px-4 bg-gray-900 border-b border-gray-800 overflow-hidden">
+    <span class="text-[10px] font-bold uppercase tracking-widest text-gray-600 shrink-0">Journal</span>
+    <div class="flex gap-4 overflow-hidden">
+      @for (entry of recentLog(); track entry.timestamp) {
+        <div class="text-xs text-gray-400 shrink-0 last:text-gray-200 transition-colors">
+          <span class="text-amber-400 font-semibold">{{ entry.playerName }}</span>
+          <span class="mx-1 text-gray-700">·</span>
+          <span>{{ entry.description }}</span>
+        </div>
+      }
+      @if (recentLog().length === 0) {
+        <span class="text-xs text-gray-700 italic">Aucune action pour le moment…</span>
+      }
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- CENTRAL ZONE                                                           -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <main class="flex flex-col items-center justify-center gap-6 p-6 overflow-hidden min-h-0">
+
+    <!-- Phase label -->
+    <div class="flex items-center gap-3 w-full max-w-xs">
+      <div class="flex-1 h-px bg-gray-800"></div>
+      <span class="text-xs font-bold uppercase tracking-widest text-amber-400 shrink-0">
+        {{ phaseLabel() }}
+      </span>
+      <div class="flex-1 h-px bg-gray-800"></div>
+    </div>
+
+    @switch (phase()) {
+
+      <!-- ── KickDown: face-down door ── -->
+      @case ('KickDown') {
+        <div class="relative group">
+          <div class="w-36 h-52 rounded-2xl bg-indigo-950 border-2 border-indigo-800
+                      flex items-center justify-center text-7xl font-black text-indigo-700
+                      shadow-xl select-none transition-transform group-hover:scale-105">
+            ?
+          </div>
+          <div class="absolute -inset-2 rounded-2xl bg-indigo-500/5 blur-lg -z-10"></div>
+        </div>
+        @if (isMyTurn()) {
+          <button (click)="kickDoor()"
+            class="px-8 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400
+                   text-gray-950 font-bold text-base shadow-lg shadow-amber-900/40
+                   transition-all hover:scale-105 active:scale-95">
+            ⚔️ Ouvrir la porte !
+          </button>
+        } @else {
+          <p class="text-sm text-gray-600">En attente du joueur actif…</p>
+        }
+      }
+
+      <!-- ── MonsterFight: monster card (combat handled by overlay) ── -->
+      @case ('MonsterFight') {
+        @if (monster(); as m) {
+          <div class="w-40 h-56 rounded-2xl bg-red-950 border-2 border-red-800
+                      flex flex-col items-center justify-center gap-3 p-4
+                      shadow-xl shadow-red-900/40 select-none">
+            <span class="text-[10px] uppercase tracking-widest text-red-500">Monstre</span>
+            <span class="text-sm font-semibold text-center leading-snug text-red-200">{{ m.name }}</span>
+            <span class="text-5xl font-black text-red-400 leading-none">{{ m.power }}</span>
+            <span class="text-[10px] text-red-600">puissance</span>
+          </div>
+        }
+      }
+
+      <!-- ── Loot ── -->
+      @case ('Loot') {
+        <p class="text-gray-500 text-sm text-center">La pièce est vide…</p>
+        @if (isMyTurn()) {
+          <div class="flex flex-col sm:flex-row gap-3">
+            <button (click)="lootRoom()"
+              class="px-6 py-3 rounded-xl bg-blue-800 hover:bg-blue-700 font-semibold
+                     transition-all hover:scale-105 active:scale-95 shadow-lg">
+              🎁 Piller la pièce
+            </button>
+            <button
+              class="px-6 py-3 rounded-xl bg-red-900/60 border border-red-800/40 font-semibold
+                     text-red-400 transition-all hover:scale-105 active:scale-95 opacity-70
+                     cursor-help"
+              title="Jouez un monstre depuis votre main pour chercher des ennuis">
+              ⚔️ Chercher des ennuis
+            </button>
+          </div>
+          <p class="text-[11px] text-gray-600">ou glissez un monstre depuis votre main</p>
+        }
+      }
+
+      <!-- ── Charity ── -->
+      @case ('Charity') {
+        @if (isMyTurn()) {
+          <p class="text-sm text-gray-400 text-center max-w-xs">
+            Si vous avez plus de 5 cartes, donnez l'excédent.<br>
+            Sinon, vous pouvez passer.
+          </p>
+          <button (click)="endTurn()"
+            class="px-8 py-3 rounded-2xl bg-green-700 hover:bg-green-600 font-bold
+                   transition-all hover:scale-105 active:scale-95 shadow-lg">
+            ✅ Fin de tour
+          </button>
+        } @else {
+          <p class="text-sm text-gray-600">Le joueur actif distribue ses cartes…</p>
+        }
+      }
+
+      <!-- ── EndTurn ── -->
+      @case ('EndTurn') {
+        <div class="text-gray-600 text-sm animate-pulse">Changement de joueur…</div>
+      }
+
+      @default {
+        <div class="text-gray-700 text-sm">En attente de la partie…</div>
+      }
+    }
+  </main>
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- PLAYER PANEL — right sidebar                                           -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <aside class="border-l border-gray-800 bg-gray-900 flex flex-col gap-2 p-3 overflow-y-auto">
+    <h2 class="text-[10px] font-bold uppercase tracking-widest text-gray-600 shrink-0 mb-1">
+      Joueurs
+    </h2>
+
+    @for (player of allPlayers(); track player.id) {
+      <div class="rounded-xl p-3 border transition-colors"
+           [class]="player.id === currentPlayerId()
+             ? 'bg-amber-950/40 border-amber-800/50'
+             : 'bg-gray-800/40 border-gray-700/30'">
+
+        <!-- Name + level -->
+        <div class="flex items-center justify-between gap-2 mb-1.5">
+          <span class="font-semibold text-sm truncate"
+                [class.text-amber-300]="player.id === currentPlayerId()">
+            {{ player.name }}
+          </span>
+          <span class="text-xs font-black text-amber-400 shrink-0 tabular-nums">
+            Niv.{{ player.level }}
+          </span>
+        </div>
+
+        <!-- Stats row -->
+        <div class="flex items-center gap-3 text-xs text-gray-500 mb-2">
+          <span title="Force de combat">⚔️ {{ player.combatPower }}</span>
+          <span class="text-gray-700">·</span>
+          <span title="Cartes en main">🃏 {{ player.hand.length }}</span>
+          @if (player.id === currentPlayerId()) {
+            <span class="ml-auto text-[9px] bg-amber-800/50 text-amber-300 px-1.5 py-0.5 rounded-full font-bold">
+              Tour
+            </span>
+          }
+        </div>
+
+        <!-- Equipped items -->
+        @if (player.equipped.length > 0) {
+          <div class="flex flex-wrap gap-1">
+            @for (item of player.equipped; track item.id) {
+              <span class="text-[10px] bg-amber-900/30 border border-amber-800/30 rounded-md
+                           px-1.5 py-0.5 text-amber-400/80 truncate max-w-[120px]"
+                    [title]="item.name">
+                {{ item.name }}
+              </span>
+            }
+          </div>
+        } @else {
+          <span class="text-[10px] text-gray-700 italic">Aucun équipement</span>
+        }
+      </div>
+    }
+
+    @if (allPlayers().length === 0) {
+      <p class="text-xs text-gray-700 italic text-center py-4">En attente des joueurs…</p>
+    }
+  </aside>
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- HAND — bottom full-width                                               -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <div class="col-span-2 border-t border-gray-800">
+    <app-hand
+      [cards]="myHand()"
+      [phase]="phase()"
+      [isMyTurn]="isMyTurn()"
+      (cardPlayed)="onCardPlayed($event)"
+      (cardEquipped)="onCardEquipped($event)"
+    />
+  </div>
+</div>
+
+<!-- Combat overlay — shown on top of everything during MonsterFight -->
+@if (inCombat()) {
+  <app-combat-overlay />
+}

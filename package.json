@@ -1,0 +1,18 @@
+{
+  "name": "munchkin",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["client", "server", "shared"],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w @munchkin/server\" \"npm run dev -w @munchkin/client\"",
+    "build": "npm run build -w @munchkin/shared && concurrently \"npm run build -w @munchkin/server\" \"npm run build -w @munchkin/client\"",
+    "test": "npm run test -w @munchkin/client",
+    "lint": "npm run lint -w @munchkin/server && npm run lint -w @munchkin/client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "@angular/common": "^21.0.0",
+    "@angular/core": "^21.0.0",
+    "@angular/platform-browser": "^21.0.0"
+  }
+}

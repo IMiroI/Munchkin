@@ -1,0 +1,127 @@
+<!-- Overlay: positioned above the board, just above the hand zone -->
+<div class="fixed inset-x-0 bottom-[216px] flex items-end justify-center pb-4
+            z-50 pointer-events-none px-4">
+  <div class="pointer-events-auto w-full max-w-lg rounded-2xl overflow-hidden
+              border border-red-900/60 bg-gray-950/95 backdrop-blur-sm
+              shadow-2xl shadow-red-950/50">
+
+    <!-- ── Header + timer ── -->
+    <div class="flex items-center justify-between px-5 py-2.5
+                bg-red-950/60 border-b border-red-900/40">
+      <span class="text-xs font-bold uppercase tracking-widest text-red-400">
+        ⚔️ Combat
+      </span>
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-gray-500">fenêtre d'intervention</span>
+        <span class="font-mono text-sm font-bold tabular-nums"
+              [class]="timerTextColor()">
+          {{ timeLeft() }}s
+        </span>
+      </div>
+    </div>
+
+    <!-- Timer bar -->
+    <div class="h-1 bg-gray-800">
+      <div class="h-full transition-all duration-1000 ease-linear"
+           [class]="timerColor()"
+           [style.width.%]="timerPct()">
+      </div>
+    </div>
+
+    <!-- ── Combat body ── -->
+    <div class="px-5 py-4">
+
+      <!-- Power comparison -->
+      <div class="flex items-center justify-center gap-6 mb-4">
+
+        <!-- My power -->
+        <div class="text-center w-24">
+          <div class="text-4xl font-black tabular-nums mb-0.5"
+               [class.text-green-400]="playerWins()"
+               [class.text-red-400]="!playerWins()">
+            {{ myPower() }}
+          </div>
+          <div class="text-[10px] text-gray-600 uppercase tracking-wide">Votre force</div>
+        </div>
+
+        <!-- VS / diff -->
+        <div class="text-center">
+          <div class="text-sm font-bold text-gray-700">VS</div>
+          <div class="text-xs font-bold mt-0.5"
+               [class.text-green-400]="playerWins()"
+               [class.text-red-400]="!playerWins()">
+            {{ diffLabel() }}
+          </div>
+        </div>
+
+        <!-- Monster power -->
+        <div class="text-center w-24">
+          <div class="text-4xl font-black text-red-400 tabular-nums mb-0.5">
+            {{ monsterPower() }}
+          </div>
+          <div class="text-[10px] text-gray-600 uppercase tracking-wide truncate">
+            {{ monster()?.name ?? 'Monstre' }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Outcome banner -->
+      <div class="text-center text-sm font-semibold mb-4"
+           [class.text-green-400]="playerWins()"
+           [class.text-red-400]="!playerWins()">
+        @if (playerWins()) {
+          Vous vaincrez ce monstre ! 🎉
+        } @else {
+          Ce monstre vous surpasse… Il faut de l'aide ou fuir. 💀
+        }
+      </div>
+
+      <!-- Action buttons (active player only) -->
+      @if (isMyTurn()) {
+        <div class="grid grid-cols-3 gap-2">
+
+          <!-- Ask for help -->
+          <button
+            class="flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl
+                   bg-blue-900/50 hover:bg-blue-800/70 border border-blue-800/40
+                   text-blue-300 transition-all hover:scale-105 active:scale-95"
+            title="Négociez avec un autre joueur">
+            <span class="text-xl leading-none">🤝</span>
+            <span class="text-[11px] font-semibold text-center leading-tight">
+              Demander de l'aide
+            </span>
+          </button>
+
+          <!-- Use item / fight now -->
+          <button (click)="fight()"
+            class="flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl
+                   bg-amber-900/50 hover:bg-amber-800/70 border border-amber-800/40
+                   text-amber-300 transition-all hover:scale-105 active:scale-95">
+            <span class="text-xl leading-none">⚔️</span>
+            <span class="text-[11px] font-semibold text-center leading-tight">
+              Se battre
+            </span>
+          </button>
+
+          <!-- Flee -->
+          <button (click)="flee()"
+            class="flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl
+                   bg-gray-800/60 hover:bg-gray-700/80 border border-gray-700/40
+                   text-gray-400 transition-all hover:scale-105 active:scale-95">
+            <span class="text-xl leading-none">🏃</span>
+            <span class="text-[11px] font-semibold text-center leading-tight">
+              Fuir<br>
+              <span class="text-[9px] text-gray-600 font-normal">(dé 5+)</span>
+            </span>
+          </button>
+        </div>
+
+      } @else {
+        <!-- Non-active players: can still play cards via hand -->
+        <div class="text-center py-1 text-xs text-gray-600 italic">
+          Vous pouvez jouer des cartes depuis votre main pour intervenir…
+        </div>
+      }
+    </div>
+  </div>
+</div>
