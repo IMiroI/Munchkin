@@ -29,48 +29,62 @@
           cdkDrag
           [cdkDragData]="card"
           class="relative flex-none w-[80px] h-[136px] rounded-xl border-2 select-none
-                 transition-all duration-200 group overflow-hidden"
+                 transition-all duration-200 group overflow-hidden cursor-pointer"
           [class]="cardClasses(card)"
           (click)="onCardClick(card)">
 
-          <!-- Subtle card shine overlay -->
-          <div class="absolute inset-0 bg-gradient-to-b from-white/6 to-transparent pointer-events-none"></div>
-
-          <!-- Card face -->
-          <div class="relative h-full flex flex-col p-1.5 z-10">
-            <!-- Type label -->
-            <div class="font-heading text-[8px] uppercase tracking-[0.12em] opacity-60 shrink-0 truncate">
-              {{ typeLabel(card) }}
-            </div>
-            <!-- Card name -->
-            <div class="flex-1 flex items-center justify-center text-center px-0.5 py-1">
-              <span class="text-[10px] font-semibold leading-snug break-words hyphens-auto">
+          <!-- Card image (if available) -->
+          @if (card.image) {
+            <img [src]="card.image" [alt]="card.name"
+                 class="absolute inset-0 w-full h-full object-cover rounded-[10px]">
+            <!-- Bottom name strip over image -->
+            <div class="absolute bottom-0 left-0 right-0 z-20
+                        bg-gradient-to-t from-black/85 via-black/50 to-transparent
+                        pt-5 pb-1.5 px-1.5 rounded-b-[10px]">
+              <p class="text-[9px] font-semibold text-white leading-tight text-center truncate">
                 {{ card.name }}
-              </span>
+              </p>
             </div>
-            <!-- Stat badge (power, level, flee bonus) -->
-            @if (statBadge(card); as badge) {
-              <div class="text-center shrink-0 pb-0.5">
-                <span class="text-[22px] font-black leading-none" [class]="badgeColor(card)">
-                  {{ badge.value }}
-                </span>
-                @if (badge.sub) {
-                  <div class="font-heading text-[7px] tracking-widest leading-none mt-0.5 opacity-70"
-                       [class]="badgeColor(card)">
-                    {{ badge.sub }}
-                  </div>
-                }
+          } @else {
+            <!-- Text fallback card face -->
+            <div class="relative h-full flex flex-col p-1.5 z-10">
+              <!-- Type label -->
+              <div class="font-heading text-[8px] uppercase tracking-[0.12em] opacity-60 shrink-0 truncate">
+                {{ typeLabel(card) }}
               </div>
-            }
-          </div>
+              <!-- Card name -->
+              <div class="flex-1 flex items-center justify-center text-center px-0.5 py-1">
+                <span class="text-[10px] font-semibold leading-snug break-words hyphens-auto">
+                  {{ card.name }}
+                </span>
+              </div>
+              <!-- Stat badge (power, level, flee bonus) -->
+              @if (statBadge(card); as badge) {
+                <div class="text-center shrink-0 pb-0.5">
+                  <span class="text-[22px] font-black leading-none" [class]="badgeColor(card)">
+                    {{ badge.value }}
+                  </span>
+                  @if (badge.sub) {
+                    <div class="font-heading text-[7px] tracking-widest leading-none mt-0.5 opacity-70"
+                         [class]="badgeColor(card)">
+                      {{ badge.sub }}
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
 
-          <!-- Corner ornaments -->
-          <span class="absolute top-1 right-1 text-[6px] opacity-30 z-10">◆</span>
+          <!-- Subtle card shine overlay -->
+          <div class="absolute inset-0 bg-gradient-to-b from-white/6 to-transparent pointer-events-none z-10"></div>
+
+          <!-- Corner ornament -->
+          <span class="absolute top-1 right-1 text-[6px] opacity-30 z-20">◆</span>
 
           <!-- One-shot badge -->
           @if (card.isOneShot) {
             <span class="absolute top-1 left-1 font-heading text-[7px] bg-amber-900/70
-                         px-1 py-px rounded text-amber-400 leading-none z-10">
+                         px-1 py-px rounded text-amber-400 leading-none z-20">
               1×
             </span>
           }
@@ -78,7 +92,7 @@
           <!-- Big item badge -->
           @if (card.isBigItem) {
             <span class="absolute bottom-1 left-1 font-heading text-[7px] bg-orange-900/70
-                         px-1 py-px rounded text-orange-400 leading-none z-10">
+                         px-1 py-px rounded text-orange-400 leading-none z-20">
               GRD
             </span>
           }
@@ -86,7 +100,7 @@
           <!-- Playable glow ring (visible on hover when playable) -->
           @if (isPlayable(card)) {
             <div class="absolute inset-0 rounded-[10px] ring-1 ring-gold-500/0
-                        group-hover:ring-gold-500/40 transition-all duration-200 pointer-events-none">
+                        group-hover:ring-gold-500/40 transition-all duration-200 pointer-events-none z-20">
             </div>
           }
 
@@ -157,17 +171,22 @@
             <div class="w-[80px] h-[136px] rounded-xl border-2 opacity-90 rotate-3 overflow-hidden
                         flex flex-col items-center justify-center gap-1 p-2 shadow-2xl"
                  [class]="colorClass(card)">
-              <div class="absolute inset-0 bg-gradient-to-b from-white/6 to-transparent"></div>
-              <span class="font-heading text-[8px] opacity-60 uppercase tracking-wider relative z-10">
-                {{ typeLabel(card) }}
-              </span>
-              <span class="text-[10px] font-semibold text-center leading-snug relative z-10">
-                {{ card.name }}
-              </span>
-              @if (statBadge(card); as badge) {
-                <span class="text-[20px] font-black relative z-10" [class]="badgeColor(card)">
-                  {{ badge.value }}
+              @if (card.image) {
+                <img [src]="card.image" [alt]="card.name"
+                     class="absolute inset-0 w-full h-full object-cover rounded-[10px]">
+              } @else {
+                <div class="absolute inset-0 bg-gradient-to-b from-white/6 to-transparent"></div>
+                <span class="font-heading text-[8px] opacity-60 uppercase tracking-wider relative z-10">
+                  {{ typeLabel(card) }}
                 </span>
+                <span class="text-[10px] font-semibold text-center leading-snug relative z-10">
+                  {{ card.name }}
+                </span>
+                @if (statBadge(card); as badge) {
+                  <span class="text-[20px] font-black relative z-10" [class]="badgeColor(card)">
+                    {{ badge.value }}
+                  </span>
+                }
               }
             </div>
           </ng-template>
@@ -202,3 +221,134 @@
     </span>
   </div>
 </div>
+
+<!-- ══════════════════════════════════════════════════════
+     Card lightbox / preview modal
+══════════════════════════════════════════════════════ -->
+@if (previewCard(); as card) {
+  <div
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    (click)="onClosePreview()">
+
+    <!-- Backdrop -->
+    <div class="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
+
+    <!-- Modal panel -->
+    <div
+      class="relative z-10 flex flex-col sm:flex-row gap-4 max-w-lg w-full
+             bg-dungeon-900 border border-dungeon-500/60 rounded-2xl shadow-2xl
+             overflow-hidden max-h-[90dvh]"
+      (click)="$event.stopPropagation()">
+
+      <!-- Card image (or colour swatch fallback) -->
+      <div class="flex items-center justify-center shrink-0 p-4 sm:p-5 sm:w-56">
+        @if (card.image) {
+          <img [src]="card.image" [alt]="card.name"
+               class="w-44 rounded-xl shadow-xl border-2 border-dungeon-600/60"
+               style="aspect-ratio: 63.5/88.9; object-fit: cover;">
+        } @else {
+          <!-- Colour swatch when no image -->
+          <div class="relative overflow-hidden w-44 rounded-xl border-2 flex flex-col items-center justify-center gap-3 p-4"
+               style="aspect-ratio: 63.5/88.9;"
+               [class]="colorClass(card)">
+            <div class="absolute inset-0 bg-gradient-to-b from-white/6 to-transparent rounded-xl pointer-events-none"></div>
+            <span class="font-heading text-[10px] uppercase tracking-[0.12em] opacity-60 text-center">
+              {{ typeLabel(card) }}
+            </span>
+            <span class="text-sm font-semibold text-center leading-snug px-2">
+              {{ card.name }}
+            </span>
+            @if (statBadge(card); as badge) {
+              <span class="text-3xl font-black" [class]="badgeColor(card)">{{ badge.value }}</span>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Card details -->
+      <div class="flex-1 flex flex-col gap-3 p-4 sm:pl-0 sm:pr-5 sm:py-5 overflow-y-auto">
+        <!-- Header -->
+        <div>
+          <p class="font-heading text-[10px] uppercase tracking-[0.14em] text-dungeon-400 mb-0.5">
+            {{ typeLabel(card) }}
+          </p>
+          <h2 class="text-base font-bold text-gold-200 leading-snug">{{ card.name }}</h2>
+        </div>
+
+        <!-- Stats -->
+        <div class="flex flex-wrap gap-2">
+          @if ((card.power ?? 0) > 0) {
+            <span class="font-heading text-[10px] px-2 py-0.5 rounded-full
+                         bg-amber-950/60 border border-amber-800/50 text-amber-400">
+              +{{ card.power }} puissance
+            </span>
+          }
+          @if (card.levelUp != null) {
+            <span class="font-heading text-[10px] px-2 py-0.5 rounded-full
+                         bg-green-950/60 border border-green-800/50 text-green-400">
+              +{{ card.levelUp }} niveau
+            </span>
+          }
+          @if ((card.fleeBonus ?? 0) > 0) {
+            <span class="font-heading text-[10px] px-2 py-0.5 rounded-full
+                         bg-sky-950/60 border border-sky-800/50 text-sky-400">
+              +{{ card.fleeBonus }} fuite
+            </span>
+          }
+          @if (card.isOneShot) {
+            <span class="font-heading text-[10px] px-2 py-0.5 rounded-full
+                         bg-amber-950/60 border border-amber-700/50 text-amber-300">
+              Usage unique
+            </span>
+          }
+          @if (card.isBigItem) {
+            <span class="font-heading text-[10px] px-2 py-0.5 rounded-full
+                         bg-orange-950/60 border border-orange-800/50 text-orange-400">
+              Grand objet
+            </span>
+          }
+          @if (card.goldValue) {
+            <span class="font-heading text-[10px] px-2 py-0.5 rounded-full
+                         bg-gold-950/60 border border-gold-900/50 text-gold-400">
+              {{ card.goldValue }} po
+            </span>
+          }
+        </div>
+
+        <!-- Effect -->
+        @if (card.effect) {
+          <p class="text-xs text-dungeon-300 leading-relaxed">{{ card.effect }}</p>
+        }
+
+        <!-- Bad stuff -->
+        @if (card.badStuff) {
+          <div class="border-t border-dungeon-700/50 pt-2">
+            <p class="font-heading text-[9px] uppercase tracking-wider text-blood-500 mb-1">Châtiment</p>
+            <p class="text-xs text-red-300/80 leading-relaxed">{{ card.badStuff }}</p>
+          </div>
+        }
+
+        <!-- Actions -->
+        <div class="flex gap-2 mt-auto pt-2">
+          @if (isPlayable(card)) {
+            <button class="mkn-btn-primary flex-1 !py-2 !text-sm" (click)="onPlayFromPreview()">
+              Jouer
+            </button>
+          }
+          <button class="mkn-btn-ghost flex-1 !py-2 !text-sm" (click)="onClosePreview()">
+            Fermer
+          </button>
+        </div>
+      </div>
+
+      <!-- Close icon -->
+      <button
+        class="absolute top-3 right-3 w-7 h-7 flex items-center justify-center
+               rounded-full bg-dungeon-700/80 text-dungeon-300 hover:text-white
+               hover:bg-dungeon-600 transition-colors text-xs z-10"
+        (click)="onClosePreview()">
+        ✕
+      </button>
+    </div>
+  </div>
+}

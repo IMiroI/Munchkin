@@ -22,6 +22,7 @@ export interface Card {
   id: string;
   name: string;
   type: CardType;
+  image?: string;
   /** Monster level OR equipment combat bonus */
   power?: number;
   effect?: string;

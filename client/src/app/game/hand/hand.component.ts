@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
 import {
   CdkDrag,
   CdkDragDrop,
@@ -27,6 +27,9 @@ export class HandComponent {
 
   /** Typed empty array for the equip drop zone so CDK infers Card[] not never[]. */
   protected readonly emptyCardList: Card[] = [];
+
+  /** Card currently shown in the lightbox preview (null = closed). */
+  protected readonly previewCard = signal<Card | null>(null);
 
   // ── Playability ────────────────────────────────────────────────────────────
 
@@ -146,8 +149,19 @@ export class HandComponent {
   // ── Event handlers ─────────────────────────────────────────────────────────
 
   protected onCardClick(card: Card): void {
-    if (!this.isPlayable(card)) return;
-    this.cardPlayed.emit(card.id);
+    this.previewCard.set(card);
+  }
+
+  protected onPlayFromPreview(): void {
+    const card = this.previewCard();
+    if (card && this.isPlayable(card)) {
+      this.cardPlayed.emit(card.id);
+      this.previewCard.set(null);
+    }
+  }
+
+  protected onClosePreview(): void {
+    this.previewCard.set(null);
   }
 
   /** Called when any item is dropped onto the equip zone. */
