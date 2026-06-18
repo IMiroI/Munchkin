@@ -23,6 +23,9 @@ export interface ClientToServerEvents {
   'room:leave': () => void;
   'game:start': () => void;
   'game:action': (gameId: string, action: ClientGameAction) => void;
+  'game:help:request': (gameId: string, helperId: string) => void;
+  'game:help:accept': (gameId: string, requesterId: string) => void;
+  'game:help:decline': (gameId: string, requesterId: string) => void;
 }
 
 export interface ServerToClientEvents {
@@ -33,4 +36,6 @@ export interface ServerToClientEvents {
   'game:started': (state: RoomState) => void;
   'game:state': (state: GameState) => void;
   'game:log': (entry: ActionLogEntry) => void;
+  'game:help:requested': (data: { gameId: string; requesterId: string; requesterName: string }) => void;
+  'game:help:responded': (data: { gameId: string; helperId: string; helperName: string; accepted: boolean }) => void;
 }

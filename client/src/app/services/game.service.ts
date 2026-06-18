@@ -78,7 +78,7 @@ export class GameService {
 
   private readPlayerIdFromJwt(): string {
     try {
-      const jwt = localStorage.getItem('jwt');
+      const jwt = sessionStorage.getItem('jwt');
       if (!jwt) return '';
       const payload = JSON.parse(atob(jwt.split('.')[1]!)) as { sub?: string };
       return payload.sub ?? '';

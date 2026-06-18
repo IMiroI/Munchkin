@@ -1,190 +1,272 @@
-<div class="h-screen overflow-hidden bg-gray-950 text-gray-100 grid"
-     style="grid-template-rows: 52px 1fr 216px; grid-template-columns: 1fr 268px;">
+<!-- Responsive layout: flex-col on mobile, CSS grid on md+ -->
+<div class="game-layout">
 
-  <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <!-- ACTION LOG — top full-width bar                                        -->
-  <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <header class="col-span-2 flex items-center gap-3 px-4 bg-gray-900 border-b border-gray-800 overflow-hidden">
-    <span class="text-[10px] font-bold uppercase tracking-widest text-gray-600 shrink-0">Journal</span>
-    <div class="flex gap-4 overflow-hidden">
+  <!-- ══════════════════════════════════════════════════════
+       LOG BAR — top strip
+  ══════════════════════════════════════════════════════ -->
+  <header class="game-log flex items-center gap-3 px-4
+                 bg-dungeon-800/90 border-b border-dungeon-600/50 overflow-hidden">
+    <span class="font-heading text-[9px] font-bold uppercase tracking-[0.18em] text-gold-800 shrink-0">
+      Journal
+    </span>
+    <div class="flex gap-4 overflow-hidden min-w-0">
       @for (entry of recentLog(); track entry.timestamp) {
-        <div class="text-xs text-gray-400 shrink-0 last:text-gray-200 transition-colors">
-          <span class="text-amber-400 font-semibold">{{ entry.playerName }}</span>
-          <span class="mx-1 text-gray-700">·</span>
+        <div class="text-xs shrink-0 last:text-gold-200/90 text-gold-800/60 transition-colors whitespace-nowrap">
+          <span class="font-heading font-semibold text-gold-600">{{ entry.playerName }}</span>
+          <span class="mx-1 text-dungeon-500">·</span>
           <span>{{ entry.description }}</span>
         </div>
       }
       @if (recentLog().length === 0) {
-        <span class="text-xs text-gray-700 italic">Aucune action pour le moment…</span>
+        <span class="text-xs text-dungeon-500 italic font-heading">L'aventure commence…</span>
       }
     </div>
   </header>
 
-  <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <!-- CENTRAL ZONE                                                           -->
-  <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <main class="flex flex-col items-center justify-center gap-6 p-6 overflow-hidden min-h-0">
+  <!-- ══════════════════════════════════════════════════════
+       CENTRAL BOARD — main action area
+  ══════════════════════════════════════════════════════ -->
+  <main class="game-main flex flex-col items-center justify-center gap-5 p-5 overflow-hidden">
 
-    <!-- Phase label -->
+    <!-- Phase indicator badge -->
     <div class="flex items-center gap-3 w-full max-w-xs">
-      <div class="flex-1 h-px bg-gray-800"></div>
-      <span class="text-xs font-bold uppercase tracking-widest text-amber-400 shrink-0">
+      <div class="flex-1 h-px bg-gradient-to-r from-transparent to-gold-900/50"></div>
+      <span class="font-heading text-[10px] font-bold uppercase tracking-[0.18em] text-gold-600 shrink-0
+                   border border-gold-900/50 px-3 py-1 rounded-full bg-gold-950/60">
         {{ phaseLabel() }}
       </span>
-      <div class="flex-1 h-px bg-gray-800"></div>
+      <div class="flex-1 h-px bg-gradient-to-l from-transparent to-gold-900/50"></div>
     </div>
 
     @switch (phase()) {
 
-      <!-- ── KickDown: face-down door ── -->
+      <!-- ── KickDown: mystery door ── -->
       @case ('KickDown') {
-        <div class="relative group">
-          <div class="w-36 h-52 rounded-2xl bg-indigo-950 border-2 border-indigo-800
-                      flex items-center justify-center text-7xl font-black text-indigo-700
-                      shadow-xl select-none transition-transform group-hover:scale-105">
-            ?
+        <div class="relative group animate-float">
+          <!-- Door card back -->
+          <div class="relative w-36 h-52 rounded-2xl overflow-hidden
+                      border-2 border-dungeon-600 bg-dungeon-800
+                      shadow-2xl shadow-dungeon-950/60
+                      transition-all duration-300 select-none
+                      group-hover:border-gold-900/50">
+            <!-- Diagonal hatch pattern -->
+            <div class="absolute inset-0 opacity-[0.07]"
+                 style="background-image: repeating-linear-gradient(45deg, #7e4e08 0px, #7e4e08 1px, transparent 1px, transparent 10px);"></div>
+            <!-- Center question mark -->
+            <div class="absolute inset-0 flex flex-col items-center justify-center gap-2">
+              <span class="font-display text-6xl font-black text-dungeon-600 leading-none">?</span>
+              <span class="font-heading text-[9px] uppercase tracking-[0.2em] text-dungeon-600">Porte</span>
+            </div>
+            <!-- Corner ornaments -->
+            <span class="absolute top-2 left-2 text-dungeon-600 text-[8px]">◆</span>
+            <span class="absolute bottom-2 right-2 text-dungeon-600 text-[8px]">◆</span>
           </div>
-          <div class="absolute -inset-2 rounded-2xl bg-indigo-500/5 blur-lg -z-10"></div>
+          <!-- Glow behind card -->
+          <div class="absolute -inset-3 rounded-2xl -z-10 transition-all duration-500
+                      bg-dungeon-600/0 group-hover:bg-gold-950/30 blur-xl"></div>
         </div>
+
         @if (isMyTurn()) {
-          <button (click)="kickDoor()"
-            class="px-8 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400
-                   text-gray-950 font-bold text-base shadow-lg shadow-amber-900/40
-                   transition-all hover:scale-105 active:scale-95">
-            ⚔️ Ouvrir la porte !
+          <button (click)="kickDoor()" class="mkn-btn-primary max-w-[220px] py-3.5 text-sm">
+            ⚔️ Ouvrir la Porte !
           </button>
         } @else {
-          <p class="text-sm text-gray-600">En attente du joueur actif…</p>
+          <p class="text-xs font-heading text-dungeon-400 text-center">
+            En attente du joueur actif…
+          </p>
         }
       }
 
       <!-- ── MonsterFight: monster card (combat handled by overlay) ── -->
       @case ('MonsterFight') {
         @if (monster(); as m) {
-          <div class="w-40 h-56 rounded-2xl bg-red-950 border-2 border-red-800
-                      flex flex-col items-center justify-center gap-3 p-4
-                      shadow-xl shadow-red-900/40 select-none">
-            <span class="text-[10px] uppercase tracking-widest text-red-500">Monstre</span>
-            <span class="text-sm font-semibold text-center leading-snug text-red-200">{{ m.name }}</span>
-            <span class="text-5xl font-black text-red-400 leading-none">{{ m.power }}</span>
-            <span class="text-[10px] text-red-600">puissance</span>
+          <div class="relative animate-combat-pulse">
+            <div class="w-40 h-56 rounded-2xl overflow-hidden
+                        bg-blood-950 border-2 border-blood-700
+                        flex flex-col items-center justify-center gap-3 p-4
+                        shadow-2xl shadow-blood-950/70 select-none">
+              <!-- Radial glow at top -->
+              <div class="absolute inset-0 opacity-10"
+                   style="background: radial-gradient(circle at 50% 20%, #e03050 0%, transparent 65%);"></div>
+              <span class="font-heading text-[9px] uppercase tracking-[0.2em] text-blood-500 relative z-10">
+                Monstre
+              </span>
+              <span class="text-sm font-bold text-center leading-snug text-blood-200 relative z-10 px-1">
+                {{ m.name }}
+              </span>
+              <div class="relative z-10 flex flex-col items-center mt-1">
+                <span class="text-5xl font-black text-blood-400 leading-none tabular-nums">{{ m.power }}</span>
+                <span class="font-heading text-[9px] tracking-[0.2em] text-blood-700 mt-0.5">PUISSANCE</span>
+              </div>
+              <!-- Corner ornaments -->
+              <span class="absolute top-2 left-2 text-blood-800 text-[8px]">◆</span>
+              <span class="absolute bottom-2 right-2 text-blood-800 text-[8px]">◆</span>
+            </div>
           </div>
         }
       }
 
-      <!-- ── Loot ── -->
+      <!-- ── Loot: empty room ── -->
       @case ('Loot') {
-        <p class="text-gray-500 text-sm text-center">La pièce est vide…</p>
-        @if (isMyTurn()) {
-          <div class="flex flex-col sm:flex-row gap-3">
-            <button (click)="lootRoom()"
-              class="px-6 py-3 rounded-xl bg-blue-800 hover:bg-blue-700 font-semibold
-                     transition-all hover:scale-105 active:scale-95 shadow-lg">
-              🎁 Piller la pièce
-            </button>
-            <button
-              class="px-6 py-3 rounded-xl bg-red-900/60 border border-red-800/40 font-semibold
-                     text-red-400 transition-all hover:scale-105 active:scale-95 opacity-70
-                     cursor-help"
-              title="Jouez un monstre depuis votre main pour chercher des ennuis">
-              ⚔️ Chercher des ennuis
-            </button>
+        <div class="flex flex-col items-center gap-5">
+          <div class="text-center">
+            <div class="text-4xl mb-3 opacity-60">🏚️</div>
+            <p class="font-heading text-sm text-dungeon-400">La pièce est vide…</p>
           </div>
-          <p class="text-[11px] text-gray-600">ou glissez un monstre depuis votre main</p>
-        }
+          @if (isMyTurn()) {
+            <div class="flex flex-col sm:flex-row gap-2 w-full max-w-sm">
+              <button (click)="lootRoom()"
+                class="mkn-btn-primary flex-1 text-sm py-2.5">
+                🎁 Piller la Pièce
+              </button>
+              <button (click)="passLoot()"
+                class="flex-1 py-2.5 px-4 rounded-xl text-sm font-heading font-semibold
+                       bg-dungeon-800/50 border border-dungeon-600/40 text-dungeon-300
+                       transition-all hover:bg-dungeon-700/60 hover:scale-105 active:scale-95">
+                ⏩ Passer
+              </button>
+            </div>
+            <p class="text-[10px] font-heading text-dungeon-500 text-center">
+              ⚔️ Chercher des ennuis : cliquez sur un Monstre de votre main
+            </p>
+          }
+        </div>
       }
 
       <!-- ── Charity ── -->
       @case ('Charity') {
-        @if (isMyTurn()) {
-          <p class="text-sm text-gray-400 text-center max-w-xs">
-            Si vous avez plus de 5 cartes, donnez l'excédent.<br>
-            Sinon, vous pouvez passer.
-          </p>
-          <button (click)="endTurn()"
-            class="px-8 py-3 rounded-2xl bg-green-700 hover:bg-green-600 font-bold
-                   transition-all hover:scale-105 active:scale-95 shadow-lg">
-            ✅ Fin de tour
-          </button>
-        } @else {
-          <p class="text-sm text-gray-600">Le joueur actif distribue ses cartes…</p>
-        }
+        <div class="flex flex-col items-center gap-5 max-w-xs text-center">
+          @if (isMyTurn()) {
+            <div>
+              <div class="text-4xl mb-3 opacity-60">🙏</div>
+              <p class="font-heading font-semibold text-gold-200 text-sm mb-1.5">Charité</p>
+              @if (mustDonate()) {
+                <p class="text-xs text-blood-400 leading-relaxed font-semibold">
+                  Vous avez {{ myHand().length }} cartes — donnez l'excédent au joueur de plus bas niveau avant de finir.
+                </p>
+              } @else {
+                <p class="text-xs text-dungeon-400 leading-relaxed">
+                  Vous avez {{ myHand().length }}/5 cartes. Vous pouvez terminer votre tour.
+                </p>
+              }
+            </div>
+            <button (click)="endTurn()"
+              [disabled]="mustDonate()"
+              class="mkn-btn-primary max-w-[200px] py-3 text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+              ✅ Fin de Tour
+            </button>
+          } @else {
+            <p class="font-heading text-sm text-dungeon-500">
+              Le joueur actif distribue ses cartes…
+            </p>
+          }
+        </div>
       }
 
       <!-- ── EndTurn ── -->
       @case ('EndTurn') {
-        <div class="text-gray-600 text-sm animate-pulse">Changement de joueur…</div>
+        <div class="flex flex-col items-center gap-3">
+          <div class="text-3xl opacity-50 animate-spin" style="animation-duration: 3s">⌛</div>
+          <p class="font-heading text-sm text-dungeon-400 animate-pulse">Changement de joueur…</p>
+        </div>
       }
 
       @default {
-        <div class="text-gray-700 text-sm">En attente de la partie…</div>
+        <p class="font-heading text-sm text-dungeon-500">En attente de la partie…</p>
       }
     }
   </main>
 
-  <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <!-- PLAYER PANEL — right sidebar                                           -->
-  <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <aside class="border-l border-gray-800 bg-gray-900 flex flex-col gap-2 p-3 overflow-y-auto">
-    <h2 class="text-[10px] font-bold uppercase tracking-widest text-gray-600 shrink-0 mb-1">
-      Joueurs
-    </h2>
+  <!-- ══════════════════════════════════════════════════════
+       PLAYERS — horizontal strip (mobile) / sidebar (desktop)
+  ══════════════════════════════════════════════════════ -->
+  <aside class="game-players">
+
+    <!-- Desktop-only label -->
+    <p class="hidden md:block font-heading text-[9px] uppercase tracking-[0.2em] text-gold-800 shrink-0 mb-2 px-1">
+      Aventuriers
+    </p>
 
     @for (player of allPlayers(); track player.id) {
-      <div class="rounded-xl p-3 border transition-colors"
+      <!-- Single card: compact vertical on mobile, full on desktop -->
+      <div class="rounded-xl border transition-colors shrink-0
+                  flex flex-col items-center justify-center px-3 py-2 min-w-[76px] w-[76px] h-[72px]
+                  md:flex-none md:w-auto md:h-auto md:block md:p-3"
            [class]="player.id === currentPlayerId()
-             ? 'bg-amber-950/40 border-amber-800/50'
-             : 'bg-gray-800/40 border-gray-700/30'">
+             ? 'bg-gold-950 border-gold-800/60 shadow-[0_0_10px_rgba(160,104,24,0.2)] md:shadow-[0_0_12px_rgba(160,104,24,0.18)]'
+             : 'bg-dungeon-900/70 border-dungeon-600/30'">
 
-        <!-- Name + level -->
-        <div class="flex items-center justify-between gap-2 mb-1.5">
-          <span class="font-semibold text-sm truncate"
-                [class.text-amber-300]="player.id === currentPlayerId()">
-            {{ player.name }}
+        <!-- Name -->
+        <span class="text-[11px] md:text-sm font-semibold truncate text-center md:text-left w-full block
+                     max-w-full md:max-w-none mb-0 md:mb-1.5"
+              [class]="player.id === currentPlayerId() ? 'text-gold-200' : 'text-dungeon-200'">
+          {{ player.name }}
+        </span>
+
+        <!-- Mobile: big level number -->
+        <div class="flex flex-col items-center md:hidden">
+          <span class="text-xl font-black leading-none tabular-nums"
+                [class]="player.id === currentPlayerId() ? 'text-gold-300' : 'text-dungeon-400'">
+            {{ player.level }}
           </span>
-          <span class="text-xs font-black text-amber-400 shrink-0 tabular-nums">
-            Niv.{{ player.level }}
+          <span class="font-heading text-[8px] tracking-widest mt-0.5"
+                [class]="player.id === currentPlayerId() ? 'text-gold-800' : 'text-dungeon-600'">
+            NIV
           </span>
         </div>
 
-        <!-- Stats row -->
-        <div class="flex items-center gap-3 text-xs text-gray-500 mb-2">
+        <!-- Desktop: stats row -->
+        <div class="hidden md:flex items-center gap-2.5 text-xs mb-2"
+             [class]="player.id === currentPlayerId() ? 'text-gold-700' : 'text-dungeon-500'">
           <span title="Force de combat">⚔️ {{ player.combatPower }}</span>
-          <span class="text-gray-700">·</span>
+          <span [class]="player.id === currentPlayerId() ? 'text-gold-900' : 'text-dungeon-700'">·</span>
           <span title="Cartes en main">🃏 {{ player.hand.length }}</span>
+          <span class="font-heading text-[10px] font-black tabular-nums ml-auto"
+                [class]="player.id === currentPlayerId() ? 'text-gold-400' : 'text-dungeon-400'">
+            Niv.{{ player.level }}
+          </span>
           @if (player.id === currentPlayerId()) {
-            <span class="ml-auto text-[9px] bg-amber-800/50 text-amber-300 px-1.5 py-0.5 rounded-full font-bold">
-              Tour
+            <span class="font-heading text-[8px] tracking-widest bg-gold-900/50 text-gold-500 px-1.5 py-0.5 rounded-full font-bold">
+              TOUR
             </span>
           }
         </div>
 
-        <!-- Equipped items -->
-        @if (player.equipped.length > 0) {
-          <div class="flex flex-wrap gap-1">
-            @for (item of player.equipped; track item.id) {
-              <span class="text-[10px] bg-amber-900/30 border border-amber-800/30 rounded-md
-                           px-1.5 py-0.5 text-amber-400/80 truncate max-w-[120px]"
-                    [title]="item.name">
-                {{ item.name }}
-              </span>
-            }
-          </div>
-        } @else {
-          <span class="text-[10px] text-gray-700 italic">Aucun équipement</span>
-        }
+        <!-- Desktop: equipment -->
+        <div class="hidden md:block">
+          @if (player.equipped.length > 0) {
+            <div class="flex flex-wrap gap-1">
+              @for (item of player.equipped; track item.id) {
+                <span class="font-heading text-[9px] px-1.5 py-0.5 rounded-md truncate max-w-[108px]"
+                      [class]="player.id === currentPlayerId()
+                        ? 'bg-gold-950 border border-gold-900/40 text-gold-700'
+                        : 'bg-dungeon-800 border border-dungeon-600/30 text-dungeon-400'"
+                      [title]="item.name">
+                  {{ item.name }}
+                </span>
+              }
+            </div>
+          } @else {
+            <span class="font-heading text-[9px] italic"
+                  [class]="player.id === currentPlayerId() ? 'text-gold-900' : 'text-dungeon-600'">
+              Aucun équipement
+            </span>
+          }
+        </div>
       </div>
     }
 
     @if (allPlayers().length === 0) {
-      <p class="text-xs text-gray-700 italic text-center py-4">En attente des joueurs…</p>
+      <p class="text-xs text-dungeon-600 italic font-heading text-center py-4 w-full">
+        En attente des aventuriers…
+      </p>
     }
   </aside>
 
-  <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <!-- HAND — bottom full-width                                               -->
-  <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <div class="col-span-2 border-t border-gray-800">
+  <!-- ══════════════════════════════════════════════════════
+       HAND — bottom zone
+  ══════════════════════════════════════════════════════ -->
+  <div class="game-hand">
     <app-hand
       [cards]="myHand()"
       [phase]="phase()"
@@ -195,7 +277,7 @@
   </div>
 </div>
 
-<!-- Combat overlay — shown on top of everything during MonsterFight -->
+<!-- Combat overlay -->
 @if (inCombat()) {
   <app-combat-overlay />
 }

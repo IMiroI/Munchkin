@@ -15,7 +15,7 @@ export class SocketService implements OnDestroy {
 
   constructor() {
     this.socket = io(SERVER_URL, {
-      auth: { token: localStorage.getItem('jwt') ?? undefined },
+      auth: { token: sessionStorage.getItem('jwt') ?? undefined },
       autoConnect: true,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     }) as any;
@@ -75,6 +75,13 @@ export class SocketService implements OnDestroy {
 
   get gameStarted$(): Observable<RoomState> {
     return this.on('game:started');
+  }
+
+  /** Reconnect with the current JWT from sessionStorage (call after auth). */
+  reconnect(): void {
+    this.socket.auth = { token: sessionStorage.getItem('jwt') ?? undefined };
+    this.socket.disconnect();
+    this.socket.connect();
   }
 
   ngOnDestroy(): void {

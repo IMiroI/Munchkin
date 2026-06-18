@@ -17,4 +17,5 @@ export type GameAction =
   | { type: 'RUN_AWAY'; dieRoll: number }
   | { type: 'PLAY_CARD'; cardId: string; targetId?: string }
   | { type: 'DONATE_CARD'; cardId: string; targetPlayerId: string }
+  | { type: 'PASS_LOOT' }
   | { type: 'END_TURN' };

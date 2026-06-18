@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
-import { GamePhase } from '@munchkin/shared';
+import { CardType, GamePhase } from '@munchkin/shared';
 import { GameService } from '../../services/game.service';
 import { HandComponent } from '../hand/hand.component';
 import { CombatOverlayComponent } from '../combat-overlay/combat-overlay.component';
@@ -27,6 +27,9 @@ export class GameBoardComponent {
     () => this.phase() === GamePhase.MonsterFight,
   );
 
+  /** True when the active player still holds more than 5 cards and must donate before ending. */
+  protected readonly mustDonate = computed(() => this.myHand().length > 5);
+
   protected readonly phaseLabel = computed(() => {
     switch (this.phase()) {
       case GamePhase.KickDown:    return 'Ouvrir la porte';
@@ -48,12 +51,22 @@ export class GameBoardComponent {
     this.action({ type: 'LOOT_ROOM' });
   }
 
+  protected passLoot(): void {
+    this.action({ type: 'PASS_LOOT' });
+  }
+
   protected endTurn(): void {
     this.action({ type: 'END_TURN' });
   }
 
   protected onCardPlayed(cardId: string): void {
-    this.action({ type: 'PLAY_CARD', cardId });
+    // In Loot phase a Monster card means "look for trouble", not a regular play
+    const card = this.myHand().find(c => c.id === cardId);
+    if (card?.type === CardType.Monster && this.phase() === GamePhase.Loot) {
+      this.action({ type: 'LOOK_FOR_TROUBLE', monsterId: cardId });
+    } else {
+      this.action({ type: 'PLAY_CARD', cardId });
+    }
   }
 
   protected onCardEquipped(cardId: string): void {

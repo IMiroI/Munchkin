@@ -13,4 +13,5 @@ export type ClientGameAction =
   | { type: 'RUN_AWAY' }
   | { type: 'PLAY_CARD'; cardId: string; targetId?: string }
   | { type: 'DONATE_CARD'; cardId: string; targetPlayerId: string }
+  | { type: 'PASS_LOOT' }
   | { type: 'END_TURN' };

@@ -6,6 +6,12 @@ function equipmentBonus(player: Player): number {
   return player.equipped.reduce((sum, c) => sum + (c.power ?? 0), 0);
 }
 
+/** Warrior class: +1 per level above 5, minimum 0. */
+function classBonus(player: Player): number {
+  const isWarrior = player.equipped.some(c => c.classId === 'warrior');
+  return isWarrior ? Math.max(0, player.level - 5) : 0;
+}
+
 function helperBonus(helpers: Player[]): number {
   return helpers.reduce((sum, h) => sum + h.level, 0);
 }
@@ -14,16 +20,18 @@ function bonusItemsTotal(items: Card[]): number {
   return items.reduce((sum, c) => sum + (c.power ?? 0), 0);
 }
 
-/** Treasures earned on victory, derived from monster power. */
+/** Treasures earned on victory — uses card data when available, otherwise derived from power. */
 function treasureCount(monster: Card): number {
+  if (monster.treasuresOnKill != null) return monster.treasuresOnKill;
   const p = monster.power ?? 0;
   if (p >= 15) return 3;
   if (p >= 8)  return 2;
   return 1;
 }
 
-/** Levels lost on bad stuff, derived from monster power. -99 signals death (lose all). */
+/** Level loss on bad stuff — uses card data when available, otherwise derived from power. -99 signals death. */
 function badStuffLevelLoss(monster: Card): LevelChange {
+  if (monster.badStuffLevel != null) return monster.badStuffLevel as LevelChange;
   const p = monster.power ?? 0;
   if (p >= 18) return -99;
   if (p >= 10) return -3;
@@ -32,16 +40,6 @@ function badStuffLevelLoss(monster: Card): LevelChange {
 }
 
 export const CombatResolver = {
-  /**
-   * Resolves a combat encounter and returns the outcome with updated treasure deck.
-   * Pure: no mutation, randomness confined to DeckManager.draw.
-   *
-   * @param player    - The active player fighting
-   * @param monster   - The monster card being fought
-   * @param helpers   - Other players lending their level to the fight
-   * @param bonusItems - Cards played from hand for their power bonus
-   * @param treasureDeck - Current treasure deck (consumed on player victory)
-   */
   resolveCombat(
     player: Player,
     monster: Card,
@@ -52,6 +50,7 @@ export const CombatResolver = {
     const playerTotal =
       player.level +
       equipmentBonus(player) +
+      classBonus(player) +
       helperBonus(helpers) +
       bonusItemsTotal(bonusItems);
 
@@ -73,6 +72,5 @@ export const CombatResolver = {
     };
   },
 
-  /** Exported so TurnManager can apply bad stuff consistently (e.g. failed Run Away). */
   badStuffLevelLoss,
 } as const;

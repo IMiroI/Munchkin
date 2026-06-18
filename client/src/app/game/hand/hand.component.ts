@@ -31,21 +31,52 @@ export class HandComponent {
   // ── Playability ────────────────────────────────────────────────────────────
 
   protected isPlayable(card: Card): boolean {
-    if (!this.isMyTurn()) return false;
-    switch (this.phase()) {
-      case GamePhase.MonsterFight:
-        return card.type === CardType.Treasure && (card.power ?? 0) > 0;
+    const phase = this.phase();
+    const myTurn = this.isMyTurn();
+
+    // Non-active players can only play MonsterBoosters during combat
+    if (!myTurn) {
+      return phase === GamePhase.MonsterFight && card.type === CardType.MonsterBooster;
+    }
+
+    switch (phase) {
+      case GamePhase.KickDown:
+        return card.type === CardType.Class ||
+               card.type === CardType.Race ||
+               card.type === CardType.Special ||
+               card.type === CardType.Treasure;
+
       case GamePhase.Loot:
-        return card.type === CardType.Monster;
+        // Monster = chercher des ennuis; everything else as normal
+        return card.type === CardType.Monster ||
+               card.type === CardType.Class ||
+               card.type === CardType.Race ||
+               card.type === CardType.Special ||
+               card.type === CardType.Treasure;
+
+      case GamePhase.MonsterFight:
+        // Equip items mid-combat, play one-shot potions, or discard MonsterBoosters
+        if (card.type === CardType.MonsterBooster) return true;
+        if (card.type !== CardType.Treasure) return false;
+        return !!card.isOneShot || (card.power ?? 0) > 0;
+
       case GamePhase.Charity:
-        return true;
+        // Monsters and curses must be donated, not played
+        return card.type === CardType.Class ||
+               card.type === CardType.Race ||
+               card.type === CardType.Special ||
+               card.type === CardType.Treasure;
+
       default:
         return false;
     }
   }
 
   protected isEquippable(card: Card): boolean {
-    return card.type === CardType.Treasure && (card.power ?? 0) > 0;
+    // Equipment: treasures with combat power or flee bonus, but not level-up cards or one-shots
+    if (card.type !== CardType.Treasure) return false;
+    if (card.levelUp != null || card.isOneShot) return false;
+    return (card.power ?? 0) > 0 || (card.fleeBonus ?? 0) > 0;
   }
 
   // ── Style helpers ──────────────────────────────────────────────────────────
@@ -61,28 +92,55 @@ export class HandComponent {
 
   protected colorClass(card: Card): string {
     switch (card.type) {
-      case CardType.Monster:    return 'bg-red-950 border-red-800 card-glow-red';
-      case CardType.Treasure:   return 'bg-amber-950 border-amber-800 card-glow-amber';
-      case CardType.DoorCurse:  return 'bg-purple-950 border-purple-800 card-glow-purple';
-      case CardType.Class:      return 'bg-blue-950 border-blue-800 card-glow-blue';
-      case CardType.Race:       return 'bg-green-950 border-green-800 card-glow-green';
-      default:                  return 'bg-gray-800 border-gray-700';
+      case CardType.Monster:        return 'bg-red-950 border-red-800 card-glow-red';
+      case CardType.Treasure:       return 'bg-amber-950 border-amber-800 card-glow-amber';
+      case CardType.DoorCurse:      return 'bg-purple-950 border-purple-800 card-glow-purple';
+      case CardType.Class:          return 'bg-blue-950 border-blue-800 card-glow-blue';
+      case CardType.Race:           return 'bg-green-950 border-green-800 card-glow-green';
+      case CardType.MonsterBooster: return 'bg-orange-950 border-orange-800';
+      case CardType.Special:        return 'bg-violet-950 border-violet-800';
+      default:                      return 'bg-gray-800 border-gray-700';
     }
   }
 
   protected typeLabel(card: Card): string {
     switch (card.type) {
-      case CardType.Monster:    return 'Monstre';
-      case CardType.Treasure:   return 'Trésor';
-      case CardType.DoorCurse:  return 'Malédiction';
-      case CardType.Class:      return 'Classe';
-      case CardType.Race:       return 'Race';
-      default:                  return '';
+      case CardType.Monster:        return 'Monstre';
+      case CardType.Treasure:       return 'Trésor';
+      case CardType.DoorCurse:      return 'Malédiction';
+      case CardType.Class:          return 'Classe';
+      case CardType.Race:           return 'Race';
+      case CardType.MonsterBooster: return 'Amplificateur';
+      case CardType.Special:        return 'Spéciale';
+      default:                      return '';
     }
   }
 
-  protected powerColor(card: Card): string {
-    return card.type === CardType.Monster ? 'text-red-400' : 'text-amber-400';
+  /**
+   * Returns the primary stat badge shown on the card face:
+   * monsters show their level, equipment shows +bonus, level-up shows +NIV.
+   */
+  protected statBadge(card: Card): { value: string; sub?: string } | null {
+    if (card.type === CardType.Monster) {
+      return card.power != null ? { value: String(card.power), sub: 'NIV' } : null;
+    }
+    if (card.levelUp != null) {
+      return { value: `+${card.levelUp}`, sub: 'NIV' };
+    }
+    if ((card.power ?? 0) > 0) {
+      return { value: `+${card.power}` };
+    }
+    if ((card.fleeBonus ?? 0) > 0) {
+      return { value: `+${card.fleeBonus}`, sub: 'FUITE' };
+    }
+    return null;
+  }
+
+  protected badgeColor(card: Card): string {
+    if (card.type === CardType.Monster) return 'text-red-400';
+    if (card.levelUp != null)           return 'text-green-400';
+    if ((card.fleeBonus ?? 0) > 0 && !(card.power ?? 0)) return 'text-sky-400';
+    return 'text-amber-400';
   }
 
   // ── Event handlers ─────────────────────────────────────────────────────────

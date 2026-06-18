@@ -1,89 +1,173 @@
-<div class="h-full flex gap-3 px-4 py-2 bg-gray-900/50 overflow-hidden" cdkDropListGroup>
+<div class="h-full flex gap-3 px-3 py-2.5
+            bg-gradient-to-b from-dungeon-700/50 to-dungeon-800/80 overflow-hidden" cdkDropListGroup>
 
-  <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <!-- Hand cards (drag source)                                               -->
-  <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <div class="flex-1 flex flex-col gap-1 min-w-0">
-    <div class="flex items-center justify-between shrink-0">
-      <span class="text-[10px] font-bold uppercase tracking-widest text-gray-600">
-        Main · {{ cards().length }} carte{{ cards().length !== 1 ? 's' : '' }}
+  <!-- ══════════════════════════════════════════════════════
+       Hand cards
+  ══════════════════════════════════════════════════════ -->
+  <div class="flex-1 flex flex-col gap-1.5 min-w-0">
+
+    <!-- Header row -->
+    <div class="flex items-center justify-between shrink-0 px-0.5">
+      <span class="font-heading text-[9px] font-bold uppercase tracking-[0.18em] text-gold-800">
+        Main &thinsp;·&thinsp; {{ cards().length }} carte{{ cards().length !== 1 ? 's' : '' }}
       </span>
       @if (!isMyTurn()) {
-        <span class="text-[10px] text-gray-700 italic">Pas votre tour</span>
+        <span class="font-heading text-[9px] italic text-dungeon-500">Pas votre tour</span>
       }
     </div>
 
+    <!-- Card list -->
     <div
       cdkDropList
       id="hand-list"
       [cdkDropListData]="cards()"
       class="flex gap-2 overflow-x-auto flex-1 items-center pb-1 min-h-0"
-      style="scrollbar-width: thin; scrollbar-color: #374151 transparent;">
+      style="scrollbar-width: thin; scrollbar-color: #5c3400 transparent;">
 
       @for (card of cards(); track card.id) {
         <div
           cdkDrag
           [cdkDragData]="card"
-          class="relative flex-none w-[88px] h-[148px] rounded-xl border-2 select-none
-                 transition-all duration-200 group"
+          class="relative flex-none w-[80px] h-[136px] rounded-xl border-2 select-none
+                 transition-all duration-200 group overflow-hidden"
           [class]="cardClasses(card)"
           (click)="onCardClick(card)">
 
-          <!-- ── Card face ── -->
-          <div class="h-full flex flex-col p-2">
-            <div class="text-[9px] uppercase tracking-wider text-gray-500 shrink-0 truncate">
+          <!-- Subtle card shine overlay -->
+          <div class="absolute inset-0 bg-gradient-to-b from-white/6 to-transparent pointer-events-none"></div>
+
+          <!-- Card face -->
+          <div class="relative h-full flex flex-col p-1.5 z-10">
+            <!-- Type label -->
+            <div class="font-heading text-[8px] uppercase tracking-[0.12em] opacity-60 shrink-0 truncate">
               {{ typeLabel(card) }}
             </div>
+            <!-- Card name -->
             <div class="flex-1 flex items-center justify-center text-center px-0.5 py-1">
-              <span class="text-[11px] font-semibold leading-snug break-words hyphens-auto">
+              <span class="text-[10px] font-semibold leading-snug break-words hyphens-auto">
                 {{ card.name }}
               </span>
             </div>
-            @if (card.power) {
-              <div class="text-center shrink-0">
-                <span class="text-[26px] font-black leading-none" [class]="powerColor(card)">
-                  +{{ card.power }}
+            <!-- Stat badge (power, level, flee bonus) -->
+            @if (statBadge(card); as badge) {
+              <div class="text-center shrink-0 pb-0.5">
+                <span class="text-[22px] font-black leading-none" [class]="badgeColor(card)">
+                  {{ badge.value }}
                 </span>
+                @if (badge.sub) {
+                  <div class="font-heading text-[7px] tracking-widest leading-none mt-0.5 opacity-70"
+                       [class]="badgeColor(card)">
+                    {{ badge.sub }}
+                  </div>
+                }
               </div>
             }
           </div>
 
-          <!-- ── Hover tooltip ── -->
-          <div class="absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2
-                      w-52 bg-gray-800 border border-gray-700/80 rounded-xl p-3
-                      shadow-2xl text-xs text-gray-300 z-[200]
+          <!-- Corner ornaments -->
+          <span class="absolute top-1 right-1 text-[6px] opacity-30 z-10">◆</span>
+
+          <!-- One-shot badge -->
+          @if (card.isOneShot) {
+            <span class="absolute top-1 left-1 font-heading text-[7px] bg-amber-900/70
+                         px-1 py-px rounded text-amber-400 leading-none z-10">
+              1×
+            </span>
+          }
+
+          <!-- Big item badge -->
+          @if (card.isBigItem) {
+            <span class="absolute bottom-1 left-1 font-heading text-[7px] bg-orange-900/70
+                         px-1 py-px rounded text-orange-400 leading-none z-10">
+              GRD
+            </span>
+          }
+
+          <!-- Playable glow ring (visible on hover when playable) -->
+          @if (isPlayable(card)) {
+            <div class="absolute inset-0 rounded-[10px] ring-1 ring-gold-500/0
+                        group-hover:ring-gold-500/40 transition-all duration-200 pointer-events-none">
+            </div>
+          }
+
+          <!-- Hover tooltip -->
+          <div class="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2
+                      w-56 bg-dungeon-800 border border-dungeon-600/80 rounded-xl p-3
+                      shadow-2xl text-xs z-[200]
                       pointer-events-none opacity-0 group-hover:opacity-100
                       transition-opacity duration-150 whitespace-normal">
-            <p class="font-semibold text-gray-100 mb-1 leading-snug">{{ card.name }}</p>
-            @if (card.power) {
-              <p class="text-amber-400 mb-1">Puissance&nbsp;: +{{ card.power }}</p>
+            <p class="font-semibold text-gold-200 mb-1.5 leading-snug">{{ card.name }}</p>
+
+            <!-- Stat lines -->
+            @if ((card.power ?? 0) > 0) {
+              <p class="text-amber-400 text-[10px] font-heading mb-0.5">
+                Puissance&nbsp;: +{{ card.power }}
+              </p>
             }
+            @if (card.levelUp != null) {
+              <p class="text-green-400 text-[10px] font-heading mb-0.5">
+                Niveau&nbsp;: +{{ card.levelUp }}
+              </p>
+            }
+            @if ((card.fleeBonus ?? 0) > 0) {
+              <p class="text-sky-400 text-[10px] font-heading mb-0.5">
+                Fuite&nbsp;: +{{ card.fleeBonus }}
+              </p>
+            }
+            @if (card.isOneShot) {
+              <p class="text-amber-300/70 text-[10px] font-heading mb-0.5">Usage unique</p>
+            }
+            @if (card.isBigItem) {
+              <p class="text-orange-300/70 text-[10px] font-heading mb-0.5">Grand objet</p>
+            }
+            @if (card.goldValue) {
+              <p class="text-gold-600 text-[10px] mb-0.5">Valeur&nbsp;: {{ card.goldValue }} po</p>
+            }
+
+            <!-- Effect text -->
             @if (card.effect) {
-              <p class="text-gray-400 leading-relaxed text-[11px]">{{ card.effect }}</p>
+              <p class="text-dungeon-300 leading-relaxed text-[10px] mt-1 border-t border-dungeon-600/50 pt-1">
+                {{ card.effect }}
+              </p>
             }
+
+            <!-- Bad stuff for monsters -->
+            @if (card.badStuff) {
+              <p class="text-red-400/80 text-[10px] mt-1 leading-relaxed border-t border-dungeon-600/50 pt-1">
+                Châtiment&nbsp;: {{ card.badStuff }}
+              </p>
+            }
+
             @if (isMyTurn() && !isPlayable(card)) {
-              <p class="mt-1.5 text-red-400/70 text-[10px]">
-                Non jouable pendant "{{ phase() }}"
+              <p class="mt-1.5 text-blood-400/70 text-[10px] font-heading border-t border-dungeon-600/50 pt-1">
+                Non jouable en phase "{{ phase() }}"
               </p>
             }
           </div>
 
-          <!-- ── CDK drag placeholder (shown in the list while dragging) ── -->
+          <!-- CDK drag placeholder -->
           <ng-template cdkDragPlaceholder>
-            <div class="w-[88px] h-[148px] rounded-xl border-2 border-dashed
-                        border-gray-700 bg-gray-800/30">
+            <div class="w-[80px] h-[136px] rounded-xl border-2 border-dashed
+                        border-dungeon-500/60 bg-dungeon-700/30">
             </div>
           </ng-template>
 
-          <!-- ── CDK drag preview ── -->
+          <!-- CDK drag preview -->
           <ng-template cdkDragPreview>
-            <div class="w-[88px] h-[148px] rounded-xl border-2 opacity-90 rotate-3
+            <div class="w-[80px] h-[136px] rounded-xl border-2 opacity-90 rotate-3 overflow-hidden
                         flex flex-col items-center justify-center gap-1 p-2 shadow-2xl"
                  [class]="colorClass(card)">
-              <span class="text-[10px] text-gray-400 uppercase">{{ typeLabel(card) }}</span>
-              <span class="text-[11px] font-semibold text-center leading-snug">{{ card.name }}</span>
-              @if (card.power) {
-                <span class="text-2xl font-black" [class]="powerColor(card)">+{{ card.power }}</span>
+              <div class="absolute inset-0 bg-gradient-to-b from-white/6 to-transparent"></div>
+              <span class="font-heading text-[8px] opacity-60 uppercase tracking-wider relative z-10">
+                {{ typeLabel(card) }}
+              </span>
+              <span class="text-[10px] font-semibold text-center leading-snug relative z-10">
+                {{ card.name }}
+              </span>
+              @if (statBadge(card); as badge) {
+                <span class="text-[20px] font-black relative z-10" [class]="badgeColor(card)">
+                  {{ badge.value }}
+                </span>
               }
             </div>
           </ng-template>
@@ -91,27 +175,29 @@
       }
 
       @if (cards().length === 0) {
-        <div class="flex-1 flex items-center justify-center text-gray-700 text-xs italic">
-          Main vide
+        <div class="flex-1 flex flex-col items-center justify-center gap-1.5 text-dungeon-600">
+          <span class="text-2xl opacity-30">🃏</span>
+          <span class="font-heading text-[10px] italic">Main vide</span>
         </div>
       }
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <!-- Equip drop zone                                                        -->
-  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- ══════════════════════════════════════════════════════
+       Equip drop zone
+  ══════════════════════════════════════════════════════ -->
   <div
     cdkDropList
     id="equip-zone"
     [cdkDropListData]="emptyCardList"
     (cdkDropListDropped)="onEquip($event)"
-    class="w-24 shrink-0 flex flex-col items-center justify-center gap-2 rounded-xl
-           border-2 border-dashed border-gray-700 text-center
-           transition-colors duration-200
-           hover:border-amber-700/60 hover:bg-amber-950/10">
-    <span class="text-2xl pointer-events-none">⚔️</span>
-    <span class="text-[10px] text-gray-500 leading-tight px-2 pointer-events-none">
+    class="w-20 shrink-0 flex flex-col items-center justify-center gap-2 rounded-xl
+           border-2 border-dashed border-dungeon-600/60 text-center
+           transition-all duration-200
+           hover:border-gold-700/60 hover:bg-gold-950/20
+           bg-dungeon-900/30">
+    <span class="text-xl pointer-events-none select-none">⚔️</span>
+    <span class="font-heading text-[9px] text-dungeon-500 leading-snug px-1.5 pointer-events-none">
       Glisser pour équiper
     </span>
   </div>
