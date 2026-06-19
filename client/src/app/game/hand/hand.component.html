@@ -28,15 +28,13 @@
         <div
           cdkDrag
           [cdkDragData]="card"
-          class="relative flex-none w-[80px] h-[136px] rounded-xl border-2 select-none
-                 transition-all duration-200 group overflow-hidden cursor-pointer"
           [class]="cardClasses(card)"
           (click)="onCardClick(card)">
 
           <!-- Card image (if available) -->
           @if (card.image) {
             <img [src]="card.image" [alt]="card.name"
-                 class="absolute inset-0 w-full h-full object-cover rounded-[10px]">
+                 class="absolute inset-0 w-full h-full object-cover rounded-[10px] pointer-events-none">
             <!-- Bottom name strip over image -->
             <div class="absolute bottom-0 left-0 right-0 z-20
                         bg-gradient-to-t from-black/85 via-black/50 to-transparent

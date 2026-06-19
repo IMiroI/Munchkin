@@ -86,11 +86,12 @@ export class HandComponent {
 
   protected cardClasses(card: Card): string {
     const color = this.colorClass(card);
+    const base = 'relative flex-none w-[80px] h-[136px] rounded-xl border-2 select-none transition-all duration-200 group overflow-hidden';
     const playable = this.isPlayable(card);
     const interactive = playable
       ? 'hover:scale-105 hover:-translate-y-3 cursor-pointer shadow-lg'
-      : 'opacity-40 cursor-not-allowed';
-    return `${color} ${interactive}`;
+      : 'opacity-60 cursor-pointer';
+    return `${base} ${color} ${interactive}`;
   }
 
   protected colorClass(card: Card): string {
