@@ -10,6 +10,7 @@ import { CombatOverlayComponent } from '../combat-overlay/combat-overlay.compone
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [HandComponent, CombatOverlayComponent],
   templateUrl: './game-board.component.html',
+  host: { style: 'display:block;min-height:100dvh;' },
 })
 export class GameBoardComponent {
   protected readonly gs = inject(GameService);

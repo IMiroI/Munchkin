@@ -1,52 +1,66 @@
-<div class="min-h-screen flex flex-col items-center justify-center p-4 py-10">
+<div class="min-h-screen flex flex-col items-center justify-center p-4 py-10 relative overflow-hidden">
+
+  <!-- Ambient background glows -->
+  <div class="absolute inset-0 pointer-events-none -z-10">
+    <div style="position:absolute;top:-10%;left:-15%;width:50%;height:50%;
+                background:radial-gradient(ellipse,rgba(126,52,168,0.07) 0%,transparent 70%);"></div>
+    <div style="position:absolute;bottom:-10%;right:-15%;width:50%;height:50%;
+                background:radial-gradient(ellipse,rgba(190,110,10,0.07) 0%,transparent 70%);"></div>
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:60%;height:60%;
+                background:radial-gradient(ellipse,rgba(60,20,120,0.05) 0%,transparent 70%);"></div>
+  </div>
 
   <!-- ── Hero / Title ── -->
-  <div class="text-center mb-8 select-none">
-    <div class="flex items-center justify-center gap-4 mb-5">
-      <div class="h-px w-16 bg-gradient-to-r from-transparent to-gold-800"></div>
-      <span class="text-gold-700 text-base">⚔</span>
-      <div class="h-px w-16 bg-gradient-to-l from-transparent to-gold-800"></div>
+  <div class="text-center mb-8 select-none animate-entrance">
+    <div class="flex items-center justify-center gap-5 mb-6">
+      <div class="h-px flex-1 max-w-[80px] bg-gradient-to-r from-transparent to-gold-800/60"></div>
+      <span class="text-gold-700 text-lg leading-none">⚔</span>
+      <div class="h-px flex-1 max-w-[80px] bg-gradient-to-l from-transparent to-gold-800/60"></div>
     </div>
 
-    <h1 class="font-display font-black text-5xl sm:text-6xl tracking-wide text-gradient-gold leading-none mb-3">
+    <h1 class="font-display font-black text-5xl sm:text-7xl tracking-wide text-gradient-gold leading-none mb-4">
       MUNCHKIN
     </h1>
 
-    <p class="font-heading text-[10px] tracking-[0.28em] uppercase text-gold-800">
+    <p class="font-heading text-[10px] tracking-[0.3em] uppercase text-gold-800/70">
       Jeu de cartes multijoueur
     </p>
 
-    <div class="flex items-center justify-center gap-4 mt-5">
-      <div class="h-px w-16 bg-gradient-to-r from-transparent to-gold-800"></div>
-      <span class="text-gold-800 text-[10px]">✦</span>
-      <div class="h-px w-16 bg-gradient-to-l from-transparent to-gold-800"></div>
+    <div class="flex items-center justify-center gap-5 mt-6">
+      <div class="h-px flex-1 max-w-[80px] bg-gradient-to-r from-transparent to-gold-800/40"></div>
+      <span class="text-gold-800/60 text-[10px]">✦</span>
+      <div class="h-px flex-1 max-w-[80px] bg-gradient-to-l from-transparent to-gold-800/40"></div>
     </div>
   </div>
 
   <!-- ── Error banner ── -->
   @if (error()) {
-    <div class="w-full max-w-md mb-4 px-4 py-3 rounded-xl
+    <div class="w-full max-w-md mb-4 px-4 py-3 rounded-2xl
                 bg-blood-950/80 border border-blood-700/50 text-blood-300 text-sm
-                flex items-center gap-3">
-      <span class="shrink-0 text-blood-400">⚠</span>
+                flex items-center gap-3 animate-entrance">
+      <span class="shrink-0 text-blood-400 text-base">⚠</span>
       <span>{{ error() }}</span>
     </div>
   }
 
   <!-- ── Step panels ── -->
-  <div class="w-full max-w-md">
+  <div class="w-full max-w-md animate-entrance" style="animation-delay: 0.1s">
 
-    <!-- ── Auth ── -->
+    <!-- ── Auth step ── -->
     @if (step() === 'auth') {
-      <div class="mkn-panel-parchment p-6 sm:p-8">
-        <div class="text-center mb-6">
+      <div class="mkn-panel-parchment p-7 sm:p-9">
+        <div class="text-center mb-7">
+          <div class="w-14 h-14 mx-auto mb-4 rounded-2xl flex items-center justify-center
+                      bg-gold-950/60 border border-gold-800/40 text-2xl select-none">
+            ⚔️
+          </div>
           <p class="font-heading font-semibold text-gold-300 text-sm mb-1.5">
             Aventurier, comment vous nommez-vous ?
           </p>
-          <p class="text-[11px] text-gold-800">Votre légende commence ici</p>
+          <p class="text-[11px] text-gold-800/70">Votre légende commence ici</p>
         </div>
 
-        <div class="space-y-3">
+        <div class="space-y-3.5">
           <input
             [(ngModel)]="nameInput"
             type="text"
@@ -60,57 +74,62 @@
             [disabled]="isLoading() || !nameInput().trim()"
             class="mkn-btn-primary py-3.5">
             @if (isLoading()) {
-              <span class="w-4 h-4 border-2 border-dungeon-900/40 border-t-dungeon-900 rounded-full animate-spin inline-block"></span>
-              Connexion en cours…
+              <span class="w-4 h-4 border-2 border-dungeon-900/40 border-t-dungeon-900/80 rounded-full animate-spin inline-block"></span>
+              Connexion…
             } @else {
-              <span>⚔️</span> Entrer dans le Donjon
+              <span>⚔</span> Entrer dans le Donjon
             }
           </button>
         </div>
       </div>
     }
 
-    <!-- ── Lobby ── -->
+    <!-- ── Lobby step ── -->
     @if (step() === 'lobby') {
-      <div class="mkn-panel-parchment p-6 sm:p-8">
+      <div class="mkn-panel-parchment p-7 sm:p-9">
 
         <!-- Connected indicator -->
-        <div class="flex items-center gap-2.5 mb-6 pb-5 border-b border-gold-900/40">
+        <div class="flex items-center gap-2.5 mb-7 pb-5 border-b border-gold-900/30">
           <div class="w-2 h-2 rounded-full bg-forest-400 animate-pulse shrink-0"></div>
-          <span class="text-xs text-gold-700">
+          <span class="text-xs text-gold-800">
             Connecté en tant que
             <span class="font-heading font-semibold text-gold-300">{{ playerName() }}</span>
           </span>
         </div>
 
-        <div class="space-y-3">
-          <!-- Create room -->
+        <div class="space-y-3.5">
+          <!-- Create room button -->
           <button
             (click)="createRoom()"
-            class="w-full text-left p-4 rounded-xl
-                   bg-gold-950/70 border border-gold-800/50
-                   hover:bg-gold-900/60 hover:border-gold-700/80
-                   transition-all duration-150 group">
-            <div class="flex items-start gap-3.5">
-              <span class="text-2xl shrink-0 mt-0.5">🏰</span>
-              <div>
-                <div class="font-heading font-bold text-gold-300 text-sm mb-1
+            class="w-full text-left p-4 rounded-2xl
+                   bg-gold-950/60 border border-gold-800/45
+                   hover:bg-gold-900/55 hover:border-gold-700/70
+                   transition-all duration-200 group
+                   hover:-translate-y-0.5 active:scale-[0.98]">
+            <div class="flex items-center gap-4">
+              <div class="w-11 h-11 rounded-xl flex items-center justify-center text-xl
+                          bg-gold-900/50 border border-gold-800/30 shrink-0 group-hover:scale-105
+                          transition-transform duration-200">
+                🏰
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="font-heading font-bold text-gold-300 text-sm mb-0.5
                             group-hover:text-gold-200 transition-colors">
                   Créer une Taverne
                 </div>
-                <div class="text-[11px] text-gold-800 leading-snug">
-                  Un code sera généré pour inviter vos compagnons
+                <div class="text-[11px] text-gold-800/70 leading-snug">
+                  Générer un code et inviter vos compagnons
                 </div>
               </div>
-              <span class="ml-auto text-dungeon-500 group-hover:text-gold-700 transition-colors mt-0.5">›</span>
+              <span class="text-dungeon-500 group-hover:text-gold-700 transition-colors text-lg leading-none shrink-0">›</span>
             </div>
           </button>
 
-          <div class="mkn-divider">ou</div>
+          <div class="mkn-divider text-[9px]">ou</div>
 
           <!-- Join room -->
-          <div class="rounded-xl bg-dungeon-900/50 border border-dungeon-600/50 p-4">
-            <p class="font-heading text-[10px] uppercase tracking-[0.2em] text-gold-700 mb-3">
+          <div class="rounded-2xl bg-dungeon-900/50 border border-dungeon-600/45 p-4">
+            <p class="font-heading text-[9px] uppercase tracking-[0.22em] text-gold-700 mb-3">
               Rejoindre une Taverne
             </p>
             <div class="flex gap-2">
@@ -119,13 +138,13 @@
                 type="text"
                 placeholder="CODE…"
                 maxlength="6"
-                class="mkn-input flex-1 uppercase tracking-[0.2em] text-center font-mono text-gold-300"
+                class="mkn-input flex-1 uppercase tracking-[0.25em] text-center font-mono text-gold-300 !text-base"
                 (keydown.enter)="joinRoom()"
               />
               <button
                 (click)="joinRoom()"
                 [disabled]="!joinCode().trim()"
-                class="mkn-btn-ocean shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">
+                class="mkn-btn-ocean shrink-0 !w-auto !px-4 disabled:opacity-40 disabled:cursor-not-allowed">
                 Rejoindre
               </button>
             </div>
@@ -134,45 +153,51 @@
       </div>
     }
 
-    <!-- ── Room ── -->
+    <!-- ── Room step ── -->
     @if (step() === 'room') {
       @if (roomState(); as room) {
-        <div class="mkn-panel-parchment p-6 sm:p-8">
+        <div class="mkn-panel-parchment p-7 sm:p-9">
 
           <!-- Room code display -->
-          <div class="text-center mb-6 pb-5 border-b border-gold-900/40">
-            <p class="font-heading text-[9px] uppercase tracking-[0.25em] text-gold-800 mb-3">
+          <div class="text-center mb-7 pb-6 border-b border-gold-900/30">
+            <p class="font-heading text-[8px] uppercase tracking-[0.28em] text-gold-800/70 mb-3">
               Code de la Taverne
             </p>
-            <div class="font-mono text-4xl sm:text-5xl font-black tracking-[0.3em] text-gold-300
-                        select-all cursor-text
-                        drop-shadow-[0_0_10px_rgba(236,196,90,0.4)]">
-              {{ room.code }}
+            <div class="relative inline-block">
+              <div class="font-mono text-4xl sm:text-5xl font-black tracking-[0.35em] text-gold-300
+                          select-all cursor-text relative z-10 px-2">
+                {{ room.code }}
+              </div>
+              <!-- Ambient glow under code -->
+              <div class="absolute -inset-2 -z-10 blur-2xl rounded-full
+                          bg-gradient-to-r from-gold-900/20 via-gold-800/30 to-gold-900/20">
+              </div>
             </div>
-            <p class="text-[10px] text-gold-900 mt-2.5">
+            <p class="text-[10px] text-gold-800/50 mt-3">
               Partagez ce code avec vos compagnons d'aventure
             </p>
           </div>
 
           <!-- Player list -->
-          <div class="mb-5">
+          <div class="mb-6">
             <div class="flex items-center justify-between mb-3">
-              <p class="font-heading text-[10px] uppercase tracking-[0.2em] text-gold-800">
+              <p class="font-heading text-[9px] uppercase tracking-[0.22em] text-gold-800/70">
                 Aventuriers
               </p>
-              <span class="font-heading text-[10px] text-gold-900">
+              <span class="font-heading text-[9px] text-gold-900/70 tabular-nums">
                 {{ room.players.length }}&thinsp;/&thinsp;6
               </span>
             </div>
             <div class="space-y-1.5">
               @for (player of room.players; track player.id) {
                 <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl
-                            bg-dungeon-900/60 border border-dungeon-600/30">
+                            bg-dungeon-900/55 border border-dungeon-600/30
+                            transition-all duration-200">
                   <div class="w-1.5 h-1.5 rounded-full bg-forest-400 shrink-0"></div>
                   <span class="text-sm font-medium flex-1 text-gold-200">{{ player.name }}</span>
                   @if (player.isHost) {
-                    <span class="font-heading text-[9px] tracking-[0.18em] uppercase
-                                 bg-gold-950 border border-gold-800/50
+                    <span class="font-heading text-[8px] tracking-[0.18em] uppercase
+                                 bg-gold-950/80 border border-gold-800/50
                                  text-gold-500 px-2 py-0.5 rounded-full font-bold">
                       HÔTE
                     </span>
@@ -182,37 +207,37 @@
             </div>
           </div>
 
-          <!-- Status messages -->
+          <!-- Status / start -->
           @if (!isHost()) {
             <div class="flex items-center justify-center gap-2 py-3 mb-3">
-              <div class="w-1 h-1 rounded-full bg-gold-700 animate-pulse"></div>
-              <p class="text-xs text-gold-800 font-heading">
-                En attente que l'hôte démarre la partie…
+              <div class="w-1 h-1 rounded-full bg-gold-800/60 animate-pulse"></div>
+              <p class="text-xs text-gold-800/60 font-heading">
+                En attente que l'hôte démarre…
               </p>
-              <div class="w-1 h-1 rounded-full bg-gold-700 animate-pulse"></div>
+              <div class="w-1 h-1 rounded-full bg-gold-800/60 animate-pulse"></div>
             </div>
           }
 
           @if (isHost()) {
             @if (canStart()) {
-              <button (click)="startGame()" class="mkn-btn-primary py-3.5 mb-2">
-                ⚔️ Lancer l'Aventure !
+              <button (click)="startGame()" class="mkn-btn-primary py-3.5 mb-3">
+                ⚔ Lancer l'Aventure !
               </button>
             } @else {
-              <div class="text-center py-4 mb-2">
-                <p class="text-xs font-heading text-gold-800 mb-3">
+              <div class="text-center py-4 mb-3">
+                <p class="text-xs font-heading text-gold-800/60 mb-3">
                   Il faut au moins 3 aventuriers pour partir à l'aventure
                 </p>
-                <div class="flex items-center justify-center gap-2">
+                <div class="flex items-center justify-center gap-2.5">
                   @for (i of [1, 2, 3]; track i) {
-                    <div class="w-3 h-3 rounded-full border transition-all duration-300"
+                    <div class="w-3 h-3 rounded-full border-2 transition-all duration-400"
                          [class]="i <= room.players.length
-                           ? 'bg-gold-500 border-gold-400 shadow-[0_0_6px_rgba(200,140,30,0.5)]'
-                           : 'bg-dungeon-700 border-dungeon-600'">
+                           ? 'bg-gold-500 border-gold-400 shadow-[0_0_8px_rgba(200,140,30,0.55)]'
+                           : 'bg-dungeon-700/60 border-dungeon-600/60'">
                     </div>
                   }
                 </div>
-                <p class="text-[10px] text-dungeon-400 mt-2">
+                <p class="text-[10px] text-dungeon-500/80 mt-2 font-heading tabular-nums">
                   {{ room.players.length }}&thinsp;/&thinsp;3 joueurs
                 </p>
               </div>
@@ -229,7 +254,7 @@
   </div>
 
   <!-- Footer -->
-  <p class="mt-8 font-heading text-[9px] tracking-[0.25em] uppercase text-dungeon-500">
+  <p class="mt-8 font-heading text-[8px] tracking-[0.28em] uppercase text-dungeon-600/60 select-none">
     Munchkin Online &thinsp;·&thinsp; Édition Numérique
   </p>
 

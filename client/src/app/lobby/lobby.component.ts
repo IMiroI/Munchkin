@@ -21,6 +21,7 @@ const SERVER_URL = 'http://localhost:3000';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FormsModule],
   templateUrl: './lobby.component.html',
+  host: { style: 'display:block;min-height:100dvh;' },
 })
 export class LobbyComponent implements OnInit {
   private readonly socket = inject(SocketService);

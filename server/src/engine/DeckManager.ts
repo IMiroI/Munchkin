@@ -927,6 +927,7 @@ const TREASURE_CARDS: readonly Card[] = [
     id: 't-063', name: 'Potion Glaciale Explosive', type: CardType.Treasure, image: '/cards/tresor_063.jpg',
     power: 3, isOneShot: true, goldValue: 100,
     effect: '+3 en combat pour le camp de votre choix. Usage unique.',
+
   },
 ];
 

@@ -86,12 +86,31 @@ export class HandComponent {
 
   protected cardClasses(card: Card): string {
     const color = this.colorClass(card);
-    const base = 'relative flex-none w-[80px] h-[136px] rounded-xl border-2 select-none transition-all duration-200 group overflow-hidden';
+    const base = 'card-hand-item card-inner-border relative flex-none w-[80px] h-[136px] rounded-xl border-2 select-none group overflow-hidden cursor-pointer';
     const playable = this.isPlayable(card);
-    const interactive = playable
-      ? 'hover:scale-105 hover:-translate-y-3 cursor-pointer shadow-lg'
-      : 'opacity-60 cursor-pointer';
-    return `${base} ${color} ${interactive}`;
+    const state = playable ? 'shadow-xl' : 'card-not-playable opacity-50';
+    return `${base} ${color} ${state}`;
+  }
+
+  protected cardFanRot(i: number, n: number): number {
+    if (n <= 1) return 0;
+    const center = (n - 1) / 2;
+    const offset = i - center;
+    const step = Math.min(4.5, 18 / n);
+    return offset * step;
+  }
+
+  protected cardArtSymbol(card: Card): string {
+    switch (card.type) {
+      case CardType.Monster:        return '☠';
+      case CardType.Treasure:       return '◈';
+      case CardType.DoorCurse:      return '⌀';
+      case CardType.Class:          return '⚔';
+      case CardType.Race:           return '◉';
+      case CardType.MonsterBooster: return '▲';
+      case CardType.Special:        return '✦';
+      default:                      return '◆';
+    }
   }
 
   protected colorClass(card: Card): string {
