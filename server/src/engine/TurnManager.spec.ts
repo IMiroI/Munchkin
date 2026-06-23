@@ -93,6 +93,38 @@ describe('TurnManager.validateAction', () => {
     expect(TurnManager.validateAction(state, 'p2', { type: 'PLAY_CARD', cardId: EQUIPMENT.id })).toBe(true);
   });
 
+  it('allows non-active player to equip an item at any phase (KickDown)', () => {
+    const state = makeState({
+      phase: GamePhase.KickDown,
+      players: [makePlayer('p1'), makePlayer('p2', { hand: [EQUIPMENT] }), makePlayer('p3')],
+    });
+    expect(TurnManager.validateAction(state, 'p2', { type: 'PLAY_CARD', cardId: EQUIPMENT.id })).toBe(true);
+  });
+
+  it('allows non-active player to play a Race card at any phase (Charity)', () => {
+    const state = makeState({
+      phase: GamePhase.Charity,
+      players: [makePlayer('p1'), makePlayer('p2', { hand: [RACE_ELF] }), makePlayer('p3')],
+    });
+    expect(TurnManager.validateAction(state, 'p2', { type: 'PLAY_CARD', cardId: RACE_ELF.id })).toBe(true);
+  });
+
+  it('allows non-active player to play a Class card at any phase (Loot)', () => {
+    const state = makeState({
+      phase: GamePhase.Loot,
+      players: [makePlayer('p1'), makePlayer('p2', { hand: [CLASS_WARRIOR] }), makePlayer('p3')],
+    });
+    expect(TurnManager.validateAction(state, 'p2', { type: 'PLAY_CARD', cardId: CLASS_WARRIOR.id })).toBe(true);
+  });
+
+  it('rejects non-active player playing a non-equippable card outside MonsterFight', () => {
+    const state = makeState({
+      phase: GamePhase.KickDown,
+      players: [makePlayer('p1'), makePlayer('p2', { hand: [LEVEL_UP] }), makePlayer('p3')],
+    });
+    expect(TurnManager.validateAction(state, 'p2', { type: 'PLAY_CARD', cardId: LEVEL_UP.id })).toBe(false);
+  });
+
   it('allows DONATE_CARD in Charity for the giver', () => {
     const state = makeState({
       phase: GamePhase.Charity,
@@ -363,10 +395,10 @@ describe('TurnManager.applyAction — FIGHT_MONSTER', () => {
 // ---------------------------------------------------------------------------
 
 describe('TurnManager.applyAction — RUN_AWAY', () => {
-  it('die roll >= 5 → escape, move to EndTurn (skip Charity)', () => {
+  it('die roll >= 5 → escape, move to Charity (no loot, still check hand limit)', () => {
     const state = makeState({ phase: GamePhase.MonsterFight, currentMonster: MONSTER });
     const next = TurnManager.applyAction(state, 'p1', { type: 'RUN_AWAY', dieRoll: 5 });
-    expect(next.phase).toBe(GamePhase.EndTurn);
+    expect(next.phase).toBe(GamePhase.Charity);
     expect(next.currentMonster).toBeUndefined();
     expect(next.discardDoor).toContainEqual(MONSTER);
   });

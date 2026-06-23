@@ -563,7 +563,7 @@ const TREASURE_CARDS: readonly Card[] = [
   {
     id: 't-037', name: 'Génocide de Fourmis à l\'Huile Bouillante', type: CardType.Treasure, image: '/cards/tresor_037.jpg',
     power: 1, levelUp: 1,
-    effect: '+1 en combat. Peut être défaussée pour gagner 1 niveau.',
+    effect: 'Oh que c\'est mesquin... Gagnez un niveau',
   },
   {
     id: 't-042', name: 'Invocation de Règles Obscures', type: CardType.Treasure, image: '/cards/tresor_042.jpg',
@@ -572,18 +572,18 @@ const TREASURE_CARDS: readonly Card[] = [
   },
   {
     id: 't-048', name: 'Mutiler les Cadavres', type: CardType.Treasure, image: '/cards/tresor_048.jpg',
-    power: 1, levelUp: 1,
-    effect: '+1 en combat. Peut être défaussée pour gagner 1 niveau après n\'importe quel combat.',
+    isOneShot: true, levelUp: 1, afterCombatOnly: true,
+    effect: 'Cette carte ne peut être jouée qu\'après un combat, mais pas obligatoirement un combat que vous avez livré.',
   },
   {
     id: 't-052', name: 'Pleurer dans les Jupes du MJ', type: CardType.Treasure, image: '/cards/tresor_052.jpg',
-    power: 1, levelUp: 1,
-    effect: '+1 en combat. Peut être défaussée pour gagner 1 niveau (impossible si vous êtes le joueur de plus haut niveau).',
+    power: 1, levelUp: 1, blockedIfLeading: true,
+    effect: 'Vous ne pouvez pas utiliser cette carte si vous êtes le joueur de plus haut niveau, ou ex-aequo avec celui-ci.',
   },
   {
     id: 't-057', name: 'Potion de Machisme Triomphant', type: CardType.Treasure, image: '/cards/tresor_057.jpg',
     power: 1, levelUp: 1,
-    effect: '+1 en combat. Peut être défaussée pour gagner 1 niveau.',
+    effect: 'Gagnez un niveau.',
   },
   {
     id: 't-072', name: 'Tuer le Fidèle Serviteur', type: CardType.Treasure, image: '/cards/tresor_072.jpg',
@@ -592,194 +592,194 @@ const TREASURE_CARDS: readonly Card[] = [
   },
   {
     id: 't-073', name: 'Vol de Niveau', type: CardType.Treasure, image: '/cards/tresor_073.jpg',
-    power: 1, levelUp: 1,
-    effect: '+1 en combat. Peut être défaussée pour gagner 1 niveau : choisissez un autre joueur qui en perd 1.',
+    isOneShot: true, stealLevel: true,
+    effect: 'Choisissez un joueur auquel vous volez un niveau. Vous gagnez un niveau, et il en perd un.',
   },
 
   // ── Armes ─────────────────────────────────────────────────────────────────
   {
     id: 't-004', name: 'Arc Enrubanné', type: CardType.Treasure, image: '/cards/tresor_004.jpg',
-    power: 4, goldValue: 800,
+    power: 4, handUsage: 2, requiredRace: 'elf', goldValue: 800,
     effect: 'Arme à 2 mains. Elfe uniquement.',
   },
   {
     id: 't-012', name: 'Bâton de Napalm', type: CardType.Treasure, image: '/cards/tresor_012.jpg',
-    power: 5, goldValue: 800,
+    power: 5, handUsage: 1, requiredClass: 'wizard', goldValue: 800,
     effect: 'Arme à 1 main. Magicien uniquement.',
   },
   {
     id: 't-017', name: 'Brochette de Rat', type: CardType.Treasure, image: '/cards/tresor_017.jpg',
-    power: 1, goldValue: 0,
-    effect: 'Arme à 1 main. Peut être défaussée pour fuir automatiquement tout monstre de niveau 8 ou inférieur.',
+    power: 1, handUsage: 1, autoFleeThreshold: 8, goldValue: 0,
+    effect: 'Défaussez cette carte pour échapper automatiquement à n\'importe quel monstre de niveau 8 ou inférieur.',
   },
   {
     id: 't-025', name: 'Dague de Traîtrise', type: CardType.Treasure, image: '/cards/tresor_025.jpg',
-    power: 3, goldValue: 400,
+    power: 3, handUsage: 1, requiredClass: 'thief', goldValue: 400,
     effect: 'Arme à 1 main. Voleur uniquement.',
   },
   {
     id: 't-029', name: 'Énorme Rocher', type: CardType.Treasure, image: '/cards/tresor_029.jpg',
-    power: 3, goldValue: 0, isBigItem: true,
+    power: 3, handUsage: 2, goldValue: 0, isBigItem: true,
     effect: 'Gros objet à 2 mains.',
   },
   {
     id: 't-031', name: 'Épée (de) Bâtard(e)', type: CardType.Treasure, image: '/cards/tresor_031.jpg',
-    power: 2, goldValue: 400,
+    power: 2, handUsage: 1, goldValue: 400,
     effect: 'Arme à 1 main.',
   },
   {
     id: 't-032', name: 'Épée de Féminisme Exacerbé', type: CardType.Treasure, image: '/cards/tresor_032.jpg',
-    power: 3, goldValue: 400,
-    effect: 'Arme à 1 main. Joueuses uniquement (ou joueurs ayant changé de sexe).',
+    power: 3, handUsage: 1, goldValue: 400,
+    effect: 'Réservé aux joueuses ( ou aux joueurs qui ont changé de sexe ).',
   },
   {
     id: 't-033', name: 'Épée Karaoké', type: CardType.Treasure, image: '/cards/tresor_033.jpg',
-    power: 2, goldValue: 400,
+    power: 2, forbiddenClass: 'thief', goldValue: 400,
     effect: 'Arme. Tous sauf Voleur.',
   },
   {
     id: 't-040', name: 'Gourdin de Misogynie Fracassante', type: CardType.Treasure, image: '/cards/tresor_040.jpg',
-    power: 3, goldValue: 400,
-    effect: 'Arme à 1 main. Joueurs de sexe masculin uniquement (ou joueuses ayant changé de sexe).',
+    power: 3, handUsage: 1, goldValue: 400,
+    effect: 'Réservé aux joueurs (ou aux joueuses qui ont changé de sexe ).',
   },
   {
     id: 't-041', name: 'Hallebarde Suisse Multifonctions', type: CardType.Treasure, image: '/cards/tresor_041.jpg',
-    power: 4, goldValue: 600, isBigItem: true,
+    power: 4, handUsage: 2, goldValue: 600, requiredNoRace: true, isBigItem: true,
     effect: 'Gros objet à 2 mains (erratum officiel). Humain uniquement (sans race).',
   },
   {
     id: 't-044', name: 'Lance de 3,50 m', type: CardType.Treasure, image: '/cards/tresor_044.jpg',
-    power: 1, goldValue: 200,
+    power: 1, handUsage: 2, goldValue: 200,
     effect: 'Arme à 2 mains.',
   },
   {
     id: 't-045', name: 'Masse d\'Armes de Répartie Piquante', type: CardType.Treasure, image: '/cards/tresor_045.jpg',
-    power: 4, goldValue: 600,
+    power: 4, handUsage: 1, requiredClass: 'cleric', goldValue: 600,
     effect: 'Arme à 1 main. Prêtre uniquement.',
   },
   {
     id: 't-046', name: 'Marteau des Rotules Douloureuses', type: CardType.Treasure, image: '/cards/tresor_046.jpg',
-    power: 4, goldValue: 600,
+    power: 4, handUsage: 1, requiredRace: 'dwarf', goldValue: 600,
     effect: 'Arme à 1 main. Nain uniquement.',
   },
   {
     id: 't-047', name: 'Missile Magique', type: CardType.Treasure, image: '/cards/tresor_047.jpg',
     power: 5, goldValue: 300, isOneShot: true,
-    effect: '+5 en combat pour le camp de votre choix. Usage unique.',
+    effect: 'A jouer pendant n\'importe quel combat. Bonus de +5 accordé à un camp au choix. Usage unique.',
   },
   {
     id: 't-064', name: 'Râpe à Fromage de la Paix', type: CardType.Treasure, image: '/cards/tresor_064.jpg',
-    power: 3, goldValue: 400,
+    power: 3, handUsage: 1, requiredClass: 'cleric', goldValue: 400,
     effect: 'Arme à 1 main. Prêtre uniquement.',
   },
   {
     id: 't-065', name: 'Rapière d\'Injustice Flagrante', type: CardType.Treasure, image: '/cards/tresor_065.jpg',
-    power: 3, goldValue: 600,
+    power: 3, handUsage: 1, requiredRace: 'elf', goldValue: 600,
     effect: 'Arme à 1 main. Elfe uniquement.',
   },
   {
     id: 't-070', name: 'Tronçonneuse de la Mort', type: CardType.Treasure, image: '/cards/tresor_070.jpg',
-    power: 3, goldValue: 600, isBigItem: true,
+    power: 3, handUsage: 2, goldValue: 600, isBigItem: true,
     effect: 'Gros objet à 2 mains.',
   },
   {
     id: 't-071', name: 'Tuba d\'Envoûtement', type: CardType.Treasure, image: '/cards/tresor_071.jpg',
-    fleeBonus: 3, goldValue: 300, isBigItem: true,
-    effect: 'Gros objet à 1 main. +3 pour fuir. En cas de fuite réussie, tirez une carte trésor face cachée.',
+    fleeBonus: 3, fleeDrawsTreasure: 1, handUsage: 1, goldValue: 300, isBigItem: true,
+    effect: 'Ce délicat instrument subjugue vos ennemis vous conférant un bonus de +3 pour Déguerpir. Si vous réussissez à fuir, tirez une carte Trésor face cachée.',
   },
 
   // ── Armures ────────────────────────────────────────────────────────────────
   {
     id: 't-005', name: 'Armure de Cuir', type: CardType.Treasure, image: '/cards/tresor_005.jpg',
-    power: 1, goldValue: 200,
+    power: 1, equipSlot: 'armor', goldValue: 200,
     effect: 'Armure.',
   },
   {
-    id: 't-006', name: 'Armure de Flamme', type: CardType.Treasure, image: '/cards/tresor_006.jpg',
-    power: 2, goldValue: 400,
+    id: 't-006', name: 'Armure de Flammes', type: CardType.Treasure, image: '/cards/tresor_006.jpg',
+    power: 2, equipSlot: 'armor', goldValue: 400,
     effect: 'Armure.',
   },
   {
     id: 't-007', name: 'Armure de Mithril', type: CardType.Treasure, image: '/cards/tresor_007.jpg',
-    power: 3, goldValue: 600, isBigItem: true,
+    power: 3, equipSlot: 'armor', goldValue: 600, isBigItem: true,
     effect: 'Gros objet. Armure. Interdite au Magicien.',
   },
   {
     id: 't-008', name: 'Armure Gluante', type: CardType.Treasure, image: '/cards/tresor_008.jpg',
-    power: 1, goldValue: 200,
+    power: 1, equipSlot: 'armor', goldValue: 200,
     effect: 'Armure.',
   },
   {
     id: 't-009', name: 'Armure Trapue', type: CardType.Treasure, image: '/cards/tresor_009.jpg',
-    power: 3, goldValue: 400,
+    power: 3, equipSlot: 'armor', requiredRace: 'dwarf', goldValue: 400,
     effect: 'Armure. Nain uniquement.',
   },
   {
     id: 't-020', name: 'Cape d\'Ombre', type: CardType.Treasure, image: '/cards/tresor_020.jpg',
-    power: 4, goldValue: 600,
-    effect: 'Armure. Voleur uniquement.',
+    power: 4, requiredClass: 'thief', goldValue: 600,
+    effect: 'Réservée aux voleurs.',
   },
 
   // ── Coiffes ────────────────────────────────────────────────────────────────
   {
     id: 't-011', name: 'Bandana de Gros Dur', type: CardType.Treasure, image: '/cards/tresor_011.jpg',
-    power: 3, goldValue: 400,
+    power: 3, equipSlot: 'headgear', requiredNoRace: true, goldValue: 400,
     effect: 'Couvre-chef. Humain uniquement (sans race).',
   },
   {
     id: 't-018', name: 'Casque de Courage', type: CardType.Treasure, image: '/cards/tresor_018.jpg',
-    power: 1, goldValue: 200,
+    power: 1, equipSlot: 'headgear', goldValue: 200,
     effect: 'Couvre-chef.',
   },
   {
     id: 't-019', name: 'Casque de Virilité Ostentatoire', type: CardType.Treasure, image: '/cards/tresor_019.jpg',
-    power: 1, goldValue: 600,
-    effect: 'Couvre-chef. +1 en combat (+3 contre les Elfes).',
+    power: 1, equipSlot: 'headgear', racePowerBonus: { elf: 3 }, goldValue: 600,
+    effect: 'Couvre-chef. +1 en combat (+3 pour les Elfes).',
   },
   {
     id: 't-022', name: 'Chapeau Pointu de Thaumaturgie', type: CardType.Treasure, image: '/cards/tresor_022.jpg',
-    power: 3, goldValue: 400,
+    power: 3, equipSlot: 'headgear', requiredClass: 'wizard', goldValue: 400,
     effect: 'Couvre-chef. Magicien uniquement.',
   },
 
   // ── Boucliers ──────────────────────────────────────────────────────────────
   {
     id: 't-014', name: 'Bouclier Surdimensionné', type: CardType.Treasure, image: '/cards/tresor_014.jpg',
-    power: 4, goldValue: 600, isBigItem: true,
+    power: 4, handUsage: 1, goldValue: 600, requiredClass: 'warrior', isBigItem: true,
     effect: 'Gros objet à 1 main. Guerrier uniquement.',
   },
   {
     id: 't-068', name: 'Targe d\'Inconscience Suicidaire', type: CardType.Treasure, image: '/cards/tresor_068.jpg',
-    power: 2, goldValue: 400,
+    power: 2, handUsage: 1, goldValue: 400,
     effect: 'Objet à 1 main.',
   },
 
   // ── Chaussures ────────────────────────────────────────────────────────────
   {
     id: 't-015', name: 'Bottes de Convocation d\'Hémorroïdes', type: CardType.Treasure, image: '/cards/tresor_015.jpg',
-    power: 2, goldValue: 400,
+    power: 2, equipSlot: 'footwear', goldValue: 400,
     effect: 'Chaussures.',
   },
   {
     id: 't-016', name: 'Bottes de Déplacement Frénétique', type: CardType.Treasure, image: '/cards/tresor_016.jpg',
-    power: 2, fleeBonus: 2, goldValue: 400,
-    effect: 'Chaussures. +2 pour fuir un combat.',
+    power: 2, equipSlot: 'footwear', fleeBonus: 2, goldValue: 400,
+    effect: 'Confèrent un bonus de +2 pour Déguerpir.',
   },
   {
     id: 't-066', name: 'Sandales de Protection', type: CardType.Treasure, image: '/cards/tresor_066.jpg',
-    goldValue: 700,
-    effect: 'Chaussures. Les malédictions piochées en défençant les portes n\'ont aucun effet. Les malédictions lancées par d\'autres joueurs s\'appliquent normalement.',
+    equipSlot: 'footwear', immuneToDoorCurse: true, goldValue: 700,
+    effect: 'Les cartes de Malédiction que vous tirez en défonçant les portes n\'ont aucun effet. Les Malédictions lancées sur vous par d\'autres joueurs vous affectent cependant normalement.',
   },
 
   // ── Objets divers (équipables) ────────────────────────────────────────────
   {
     id: 't-023', name: 'Collants de Force de Géant', type: CardType.Treasure, image: '/cards/tresor_023.jpg',
-    power: 3, goldValue: 600,
-    effect: 'Tous sauf Guerrier.',
+    power: 3, goldValue: 600, forbiddenClass: 'warrior',
+    effect: 'Interdit aux Guerriers.',
   },
   {
     id: 't-030', name: 'Escabeau', type: CardType.Treasure, image: '/cards/tresor_030.jpg',
-    power: 3, goldValue: 400, isBigItem: true,
+    power: 3, goldValue: 400, requiredRace: 'halfling', isBigItem: true,
     effect: 'Gros objet. Halfelin uniquement.',
   },
   {
@@ -794,14 +794,14 @@ const TREASURE_CARDS: readonly Card[] = [
   {
     id: 't-069', name: 'Titre qui en Jette Vraiment Grave', type: CardType.Treasure, image: '/cards/tresor_069.jpg',
     power: 3, goldValue: 0,
-    effect: 'N\'est pas un objet sans valeur (erratum officiel).',
+    effect: 'Aucune valeur',
   },
 
   // ── Objets spéciaux ────────────────────────────────────────────────────────
   {
     id: 't-002', name: 'Anneau de Souhait', type: CardType.Treasure, image: '/cards/tresor_002.jpg',
-    isOneShot: true, goldValue: 500,
-    effect: 'Annule n\'importe quelle malédiction, à tout moment. Usage unique.',
+    isOneShot: true, cancelsCurse: true, goldValue: 500,
+    effect: 'Annule n\'importe quelle Malédiction. Peut être joué n\'importe quand. Usage unique.',
   },
   {
     id: 't-003', name: 'Anneau de Souhait', type: CardType.Treasure,
@@ -810,13 +810,13 @@ const TREASURE_CARDS: readonly Card[] = [
   },
   {
     id: 't-010', name: 'Baguette de Sourcier', type: CardType.Treasure, image: '/cards/tresor_010.jpg',
-    isOneShot: true, goldValue: 1100,
-    effect: 'Usage unique : fouillez les défausses et récupérez la carte de votre choix, puis défaussez la baguette.',
+    isOneShot: true, searchDiscard: true, goldValue: 1100,
+    effect: 'Parcourez les défausses pour trouver la carte de votre choix. Prenez-la et défaussez la baguette de sourcier.',
   },
   {
     id: 't-027', name: 'Doppelganger', type: CardType.Treasure, image: '/cards/tresor_027.jpg',
-    isOneShot: true, goldValue: 300,
-    effect: 'Usage unique : si vous combattez seul, crée un double qui double votre force de combat.',
+    isOneShot: true, doublesPlayerStrength: true, goldValue: 300,
+    effect: 'Crée votre double, qui combat à vos côtés : votre force de combat est doublée. Vous ne pouvez utiliser le Doppelganger que si vous êtes le seul joueur à participer au combat. Usage unique.',
   },
   {
     id: 't-028', name: 'Dé Pipé', type: CardType.Treasure, image: '/cards/tresor_028.jpg',
@@ -825,13 +825,13 @@ const TREASURE_CARDS: readonly Card[] = [
   },
   {
     id: 't-035', name: 'Fidèle Serviteur', type: CardType.Treasure, image: '/cards/tresor_035.jpg',
-    power: 1,
-    effect: '+1 en combat. Permet de porter un gros objet supplémentaire. Peut être défaussé pour fuir automatiquement n\'importe quel monstre.',
+    extraBigItemSlot: true, discardForAutoFlee: true,
+    effect: 'Ce laquais qui vous suit et vous sert de porteur vous permet de porter et d\'utiliser un Gros objet supplémentaire, mais il ne se battra pas pour vous...si vous perdez votre serviteur, vous perdez aussi votre gros objet. Vous pouvez défausser votre serviteur pour vous permettre de fuir automatiquement contre n\'importe quel monstre.',
   },
   {
     id: 't-038', name: 'Genouillères de Séduction', type: CardType.Treasure, image: '/cards/tresor_038.jpg',
-    goldValue: 600,
-    effect: 'Tous sauf Prêtre. Si vous demandez de l\'aide à un joueur de niveau supérieur, il ne peut ni refuser ni exiger de paiement. En contrepartie, vous ne montez pas de niveau dans ce combat.',
+    isOneShot: true, forcedHelper: true, forbiddenClass: 'cleric', goldValue: 600,
+    effect: 'Si vous demandez à quelqu\'un d\'un niveau supérieur au votre de vous aider à combattre un monstre, il ne peut ni refuser. ni exiger de paiement en retour. Vous ne pouvez pas gagner en montant de niveau dans un combat dans lequel vous avez été aidé grâce à vos Genouillères.',
   },
 
   // ── Cartes spéciales (trésor) ──────────────────────────────────────────────
@@ -844,7 +844,7 @@ const TREASURE_CARDS: readonly Card[] = [
   {
     id: 't-013', name: 'Boisson Énergisante Éventée', type: CardType.Treasure, image: '/cards/tresor_013.jpg',
     power: 2, isOneShot: true, goldValue: 200,
-    effect: '+2 en combat pour le camp de votre choix. Usage unique.',
+    effect: 'À jouer pendant n\'importe quel combat. Bonus de +2 accordé à un camp au choix. Usage unique.',
   },
   {
     id: 't-021', name: 'Champagne', type: CardType.Treasure, image: '/cards/tresor_021.jpg',
@@ -853,13 +853,13 @@ const TREASURE_CARDS: readonly Card[] = [
   },
   {
     id: 't-036', name: 'Flaque de Colle', type: CardType.Treasure, image: '/cards/tresor_036.jpg',
-    isOneShot: true, goldValue: 100,
-    effect: 'Usage unique : quand un joueur réussit à fuir (même automatiquement), il doit relancer les dés pour fuir.',
+    isOneShot: true, rerollFlee: true, goldValue: 100,
+    effect: 'À utiliser quand quelqu\'un reussi à fuir le combat pour quelque que raison que ce soit. la victime doit relancer les dés pour Déguerpir même s\'il s\'agissait d\'une réussite automatique la première fois.',
   },
   {
     id: 't-043', name: 'Lampe Merveilleuse', type: CardType.Treasure, image: '/cards/tresor_043.jpg',
-    isOneShot: true, goldValue: 500,
-    effect: 'Usage unique (sur votre tour) : un génie fait disparaître un monstre du combat. Récupérez son trésor sans gagner de niveau.',
+    isOneShot: true, banishMonster: true, goldValue: 500,
+    effect: 'Vous ne pouvez utiliser la Lampe qu\'à votre tour. Elle invoque un génie qui fait disparaitre un seul monstre, même s\'il était sur le point de vous attraper après un jet de Déguerpir raté. S\'il était seul contre vous, vous prenez son trésor mais sans gagner de niveau. Usage unique.',
   },
   {
     id: 't-049', name: 'Mur Instantané', type: CardType.Treasure, image: '/cards/tresor_049.jpg',
@@ -868,7 +868,7 @@ const TREASURE_CARDS: readonly Card[] = [
   },
   {
     id: 't-067', name: 'Sandwich Chocolat-Moules-Anchois', type: CardType.Treasure, image: '/cards/tresor_067.jpg',
-    power: 3, isOneShot: true, goldValue: 400,
+    power: 3, isOneShot: true, requiredRace: 'halfling', goldValue: 400,
     effect: '+3 en combat. Usage unique. Halfelin uniquement.',
   },
 
@@ -885,8 +885,8 @@ const TREASURE_CARDS: readonly Card[] = [
   },
   {
     id: 't-054', name: 'Potion d\'Invisibilité', type: CardType.Treasure, image: '/cards/tresor_054.jpg',
-    isOneShot: true, goldValue: 200,
-    effect: 'Usage unique : après avoir raté un jet de fuite, fuyez automatiquement.',
+    isOneShot: true, autoFlee: true, goldValue: 200,
+    effect: 'A défausser après avoir raté votre jet pour Déguerpir. Vous vous enfuyez automatiquement. Usage unique.',
   },
   {
     id: 't-055', name: 'Potion d\'Amitié', type: CardType.Treasure, image: '/cards/tresor_055.jpg',
@@ -916,12 +916,12 @@ const TREASURE_CARDS: readonly Card[] = [
   {
     id: 't-061', name: 'Potion de Sommeil', type: CardType.Treasure, image: '/cards/tresor_061.jpg',
     power: 2, isOneShot: true, goldValue: 100,
-    effect: '+2 en combat pour le camp de votre choix. Usage unique.',
+    effect: 'A jouer pendant n\'importe quel combat. Bonus de +2 accordé à un camp au choix. Usage unique.',
   },
   {
     id: 't-062', name: 'Potion de Transfert', type: CardType.Treasure, image: '/cards/tresor_062.jpg',
-    isOneShot: true, goldValue: 300,
-    effect: 'Usage unique en combat : un autre joueur de votre choix prend votre place pour combattre (récupère trésors et niveaux). Vous reprenez votre tour et pouvez piller la pièce.',
+    isOneShot: true, transferCombat: true, goldValue: 300,
+    effect: 'A jouer pendant n\'importe quel combat. Un autre joueur de votre choix combat le ou les monstres. Il peut demander de l\'aide normalement. et obtient le trésor et les niveaux s\'il l\'emporte. Le joueur qui combattait à l\'origine reprend alors son tour, et peut piller la pièce, que le combat ait été remporté ou perdu. Usage unique.',
   },
   {
     id: 't-063', name: 'Potion Glaciale Explosive', type: CardType.Treasure, image: '/cards/tresor_063.jpg',
