@@ -41,8 +41,8 @@ const DOOR_CARDS: readonly Card[] = [
   },
   {
     id: 'd-005', name: 'Belvédère Sauvage', type: CardType.Monster, image: '/cards/porte_005.jpg',
-    power: 8, treasuresOnKill: 2,
-    effect: 'Nul ne peut aider le joueur ; doit l\'affronter seul.',
+    power: 8, treasuresOnKill: 2, noHelpers: true,
+    effect: 'Nul ne peut vous aider. Vous devez affronter seul le Belvédère.',
     badStuff: 'Perdez 3 niveaux.',
     badStuffLevel: -3,
   },
@@ -67,7 +67,7 @@ const DOOR_CARDS: readonly Card[] = [
   },
   {
     id: 'd-009', name: 'Cheval Zombie', type: CardType.Monster, image: '/cards/porte_009.jpg',
-    power: 4, treasuresOnKill: 2,
+    power: 4, treasuresOnKill: 2, isUndead: true,
     effect: '+5 contre les Nains. Mort-vivant.',
     badStuff: 'Il mord, rue, et sent le canasson crevé : perdez 2 niveaux.',
     badStuffLevel: -2,
@@ -108,9 +108,9 @@ const DOOR_CARDS: readonly Card[] = [
   },
   {
     id: 'd-020', name: 'Golem Fracassé', type: CardType.Monster, image: '/cards/porte_020.jpg',
-    power: 14, treasuresOnKill: 4,
-    effect: 'Peut être ignoré en lui laissant son trésor, sauf un Halfelin qui doit obligatoirement combattre.',
-    badStuff: 'Mort du joueur.',
+    power: 14, treasuresOnKill: 4, avoidable: true, halflingMustFight: true,
+    effect: 'Vous pouvez combattre ce Golem complètement défoncé ou vous contenter de lui faire coucou et lui laisser son trésor. (Exception: les savoureux halfelins doivent combattre).',
+    badStuff: 'Incident Fâcheux: Il a la dalle. Il vous mange. Vous êtes mort.',
     badStuffLevel: -99,
   },
   {
@@ -121,10 +121,10 @@ const DOOR_CARDS: readonly Card[] = [
     badStuffLevel: -2,
   },
   {
-    id: 'd-031', name: 'Harpistes Harpies', type: CardType.Monster, image: '/cards/porte_031.jpg',
-    power: 4, treasuresOnKill: 2,
+    id: 'd-031', name: 'Harpistes X Harpies', type: CardType.Monster, image: '/cards/porte_031.jpg',
+    power: 4, treasuresOnKill: 2, powerBonusVsClass: { wizard: 5 },
     effect: 'Résistent à la magie. +5 contre les Magiciens.',
-    badStuff: 'Perdez 2 niveaux.',
+    badStuff: 'Incident Fâcheux : Elles jouent vraiment comme des manches. Perdez 2 niveaux.',
     badStuffLevel: -2,
   },
   {
@@ -147,18 +147,18 @@ const DOOR_CARDS: readonly Card[] = [
     badStuffLevel: -1,
   },
   {
-    id: 'd-035', name: 'Lépréxchaun', type: CardType.Monster, image: '/cards/porte_035.jpg',
-    power: 4, treasuresOnKill: 2,
-    effect: '+5 contre les Elfes.',
-    badStuff: 'Il prend 2 objets au joueur, choisis par chacun des 2 joueurs qui l\'entourent.',
-    badStuffLevel: -1,
+    id: 'd-035', name: 'Lépreuxchaun', type: CardType.Monster, image: '/cards/porte_035.jpg',
+    power: 4, treasuresOnKill: 2, powerBonusVsRace: { elf: 5 },
+    badStuffLevel: 0, badStuffNeighborsDiscard: true,
+    effect: 'Mais il est dégueu ! +5 contre les Elfes.',
+    badStuff: 'Incident Fâcheux: il vous prend 2 objets, choisis par chacun des deux joueurs qui vous entourent.',
   },
   {
     id: 'd-058', name: 'Manticor-nithorynque', type: CardType.Monster, image: '/cards/porte_058.jpg',
-    power: 6, treasuresOnKill: 2,
+    power: 6, treasuresOnKill: 2, powerBonusVsClass: { wizard: 6 },
+    badStuffLevel: -2, badStuffChoiceLevelsOrHand: true,
     effect: 'Résiste à la magie. +6 contre les Magiciens.',
-    badStuff: 'Défaussez toute votre main ou perdez 2 niveaux.',
-    badStuffLevel: -2,
+    badStuff: 'Incident Fâcheux : défaussez toute votre main ou perdez 2 niveaux (au choix).',
   },
   {
     id: 'd-062', name: 'Morpions', type: CardType.Monster, image: '/cards/porte_062.jpg',
@@ -169,9 +169,9 @@ const DOOR_CARDS: readonly Card[] = [
   },
   {
     id: 'd-063', name: 'Mr. Nonos', type: CardType.Monster, image: '/cards/porte_063.jpg',
-    power: 2, treasuresOnKill: 1,
-    effect: 'Si vous devez fuir, perdez 1 niveau même si vous réussissez. Mort-vivant.',
-    badStuff: 'Son contact osseux : perdez 2 niveaux.',
+    power: 2, treasuresOnKill: 1, isUndead: true, fleeSuccessPenalty: 1,
+    effect: 'Si vous devez vous enfuir, vous perdez 1 niveau même si vous arrivez à Déguerpir.',
+    badStuff: 'Incident Fâcheux : son contact osscux vous coûte 2 niveaux.',
     badStuffLevel: -2,
   },
   {
@@ -189,16 +189,16 @@ const DOOR_CARDS: readonly Card[] = [
   },
   {
     id: 'd-069', name: 'Octaèdre Gélatineux', type: CardType.Monster, image: '/cards/porte_069.jpg',
-    power: 2, treasuresOnKill: 1,
-    effect: '+1 au jet pour fuir.',
-    badStuff: 'Si vous ne réussissez pas à fuir, lâchez tous vos gros objets.',
+    power: 2, treasuresOnKill: 1, monsterFleeBonus: 1, badStuffLoseAllBigItems: true,
+    effect: '+1 au jet pour Déguerpir.',
+    badStuff: 'Incident Fâcheux : si vous n\'arrivez pas à Déguerpir, vous lâchez tous vos Gros objets.',
     badStuffLevel: -2,
   },
   {
     id: 'd-072', name: 'Pit Bull', type: CardType.Monster, image: '/cards/porte_072.jpg',
-    power: 2, treasuresOnKill: 1,
-    effect: 'Si vous ne pouvez pas le vaincre, fuite automatique en abandonnant une baguette, un bâton ou une lance.',
-    badStuff: 'Traces de morsures sur les fesses : perdez 2 niveaux.',
+    power: 2, treasuresOnKill: 1, autoFleeByItemTag: ['wand', 'staff', 'lance'],
+    effect: 'Si vous ne pouvez le vaincre, vous pouvez le distraire (vous Déguerpissez automatiquement) en lachant une baguette, un bâton ou une lance. Va chercher, Médor!',
+    badStuff: 'Incident Fâcheux : traces de morsures sur vos fesses. Perdez 2 niveaux',
     badStuffLevel: -2,
   },
   {
@@ -224,7 +224,7 @@ const DOOR_CARDS: readonly Card[] = [
   },
   {
     id: 'd-079', name: 'René Crophage et Fils, Dépanneurs en Chirurgie', type: CardType.Monster, image: '/cards/porte_079.jpg',
-    power: 16, treasuresOnKill: 4,
+    power: 16, treasuresOnKill: 4, isUndead: true, levelsOnKill: 2, fleeSuccessPenalty: 2,
     effect: 'Ne poursuit aucun joueur de niveau 3 ou moins. Les autres perdent 2 niveaux même en cas de fuite réussie. Mort-vivant. Vaincu : gagnez 2 niveaux.',
     badStuff: 'Vidange des fluides vitaux : retombez au niveau 1.',
     badStuffLevel: -8,
@@ -259,16 +259,16 @@ const DOOR_CARDS: readonly Card[] = [
   },
   {
     id: 'd-090', name: 'Tut-Tuuut-Ankh-Ammon', type: CardType.Monster, image: '/cards/porte_090.jpg',
-    power: 16, treasuresOnKill: 4,
+    power: 16, treasuresOnKill: 4, isUndead: true, levelsOnKill: 2, fleeSuccessPenalty: 2,
     effect: 'Ne poursuit aucun joueur de niveau 3 ou moins. Les autres perdent 2 niveaux même en cas de fuite réussie. Mort-vivant. Vaincu : gagnez 2 niveaux.',
     badStuff: 'Perdez tous vos objets et toutes les cartes de votre main.',
     badStuffLevel: -3,
   },
   {
     id: 'd-091', name: 'Vamps...ires !?!', type: CardType.Monster, image: '/cards/porte_091.jpg',
-    power: 8, treasuresOnKill: 2,
-    effect: 'Aucun objet ni bonus n\'est utilisable contre eux : seul votre niveau compte.',
-    badStuff: 'Votre niveau devient équivalent à celui du joueur de plus bas niveau.',
+    power: 8, treasuresOnKill: 2, rawLevelOnly: true, badStuffSetToMinLevel: true,
+    effect: 'Pour les combattre, vous ne pouvez utiliser aucun objet ni autre bonus! Vous ne pouvez utiliser que votre niveau.',
+    badStuff: 'Incident Fâcheux : votre niveau devient équivalent à celui du joueur de plus bas niveau...',
     badStuffLevel: -3,
   },
 
@@ -390,51 +390,60 @@ const DOOR_CARDS: readonly Card[] = [
   },
   {
     id: 'd-056', name: 'Malédiction ! Poulet sur la Tête', type: CardType.DoorCurse, image: '/cards/porte_056.jpg',
-    curseEffect: 'generic',
-    effect: '-1 à tous vos jets de dé. La malédiction est levée si vous perdez votre couvre-chef.',
+    curseEffect: 'persistent-equip', dieRollPenalty: -1, removedWithHeadgear: true,
+    effect: '-1 à tous vos jets de dé. Toute Malédiction ou Incident Fâcheux qui vous retire votre Couvre-chef fera également disparaitre le poulet',
   },
   {
     id: 'd-057', name: 'Malédiction Vraiment Trop Injuste !', type: CardType.DoorCurse, image: '/cards/porte_057.jpg',
-    curseEffect: 'generic',
-    effect: 'Perdez l\'objet qui vous donne le plus haut bonus de combat.',
+    curseEffect: 'lose-highest-bonus-item',
+    effect: 'Perdez l\'objet qui vous donne le plus haut bonus.',
   },
 
   // ── Classes (3 exemplaires chacune) ───────────────────────────────────────
   {
     id: 'd-022', name: 'Guerrier', type: CardType.Class, classId: 'warrior', image: '/cards/porte_022.jpg',
-    effect: 'Gagne les combats à égalité. Berserk : peut défausser jusqu\'à 3 cartes en combat pour +1 chacune.',
+    classBerserkerRage: true, classWarriorTiebreaker: true,
+    effect: 'Rage de berserker: vous pouvez défausser jusqu\'à 3 cartes durant un combat. Chacune vous donne un bonus de +1. En cas d\'ex-aequo durant un combat, c\'est vous qui l\'emportez.',
   },
   {
     id: 'd-023', name: 'Guerrier', type: CardType.Class, classId: 'warrior', image: '/cards/porte_023.jpg',
-    effect: 'Gagne les combats à égalité. Berserk : peut défausser jusqu\'à 3 cartes en combat pour +1 chacune.',
+    classBerserkerRage: true, classWarriorTiebreaker: true,
+    effect: 'Rage de berserker: vous pouvez défausser jusqu\'à 3 cartes durant un combat. Chacune vous donne un bonus de +1. En cas d\'ex-aequo durant un combat, c\'est vous qui l\'emportez.',
   },
   {
     id: 'd-024', name: 'Guerrier', type: CardType.Class, classId: 'warrior', image: '/cards/porte_024.jpg',
-    effect: 'Gagne les combats à égalité. Berserk : peut défausser jusqu\'à 3 cartes en combat pour +1 chacune.',
+    classBerserkerRage: true, classWarriorTiebreaker: true,
+    effect: 'Rage de berserker: vous pouvez défausser jusqu\'à 3 cartes durant un combat. Chacune vous donne un bonus de +1. En cas d\'ex-aequo durant un combat, c\'est vous qui l\'emportez.',
   },
   {
     id: 'd-036', name: 'Magicien', type: CardType.Class, classId: 'wizard', image: '/cards/porte_036.jpg',
-    effect: 'Sort de Vol : défaussez jusqu\'à 3 cartes après le jet de fuite pour +1 chacune. Sort de Charme : défaussez toute votre main (min 3 cartes) pour neutraliser un monstre (trésor sans niveau).',
+    classFleeBoostByDiscard: true, classCharmMonster: true,
+    effect: 'Sort de vol : après avoir jeté le dé pour déguerpir, vous pouvez défausser jusqu\'à 3 cartes pour +1 chacune. Sort de charme : défaussez toute votre main (minimum 3 cartes) pour charmer un Monstre — prenez son Trésor sans gagner de niveau.',
   },
   {
     id: 'd-037', name: 'Magicien', type: CardType.Class, classId: 'wizard', image: '/cards/porte_037.jpg',
-    effect: 'Sort de Vol : défaussez jusqu\'à 3 cartes après le jet de fuite pour +1 chacune. Sort de Charme : défaussez toute votre main (min 3 cartes) pour neutraliser un monstre (trésor sans niveau).',
+    classFleeBoostByDiscard: true, classCharmMonster: true,
+    effect: 'Sort de vol : après avoir jeté le dé pour déguerpir, vous pouvez défausser jusqu\'à 3 cartes pour +1 chacune. Sort de charme : défaussez toute votre main (minimum 3 cartes) pour charmer un Monstre — prenez son Trésor sans gagner de niveau.',
   },
   {
     id: 'd-038', name: 'Magicien', type: CardType.Class, classId: 'wizard', image: '/cards/porte_038.jpg',
-    effect: 'Sort de Vol : défaussez jusqu\'à 3 cartes après le jet de fuite pour +1 chacune. Sort de Charme : défaussez toute votre main (min 3 cartes) pour neutraliser un monstre (trésor sans niveau).',
+    classFleeBoostByDiscard: true, classCharmMonster: true,
+    effect: 'Sort de vol : après avoir jeté le dé pour déguerpir, vous pouvez défausser jusqu\'à 3 cartes pour +1 chacune. Sort de charme : défaussez toute votre main (minimum 3 cartes) pour charmer un Monstre — prenez son Trésor sans gagner de niveau.',
   },
   {
     id: 'd-075', name: 'Prêtre', type: CardType.Class, classId: 'cleric', image: '/cards/porte_075.jpg',
-    effect: 'Résurrection : pioche dans la défausse (défausse une carte pour chacune récupérée). Renvoi : défaussez jusqu\'à 3 cartes contre un Mort-Vivant pour +3 chacune.',
+    classResurrection: true, classTurning: true,
+    effect: 'Résurrection: quand vous devez tirer des cartes face visible, vous pouvez choisir de tirer à la place le même nombre de carte de la défausse appropriée (Trésor ou Donjon). Vous devez ensuite défausser une carte de votre main pour chaque carte que vous avez tirée ainsi. Renvoi vous pouvez défausser jusqu\'à 3 cartes en combat contre une créature de type Mort-vivant. Chaque carte défausséc vous donne un bonus de +3.',
   },
   {
     id: 'd-076', name: 'Prêtre', type: CardType.Class, classId: 'cleric', image: '/cards/porte_076.jpg',
-    effect: 'Résurrection : pioche dans la défausse (défausse une carte pour chacune récupérée). Renvoi : défaussez jusqu\'à 3 cartes contre un Mort-Vivant pour +3 chacune.',
+    classResurrection: true, classTurning: true,
+    effect: 'Résurrection: quand vous devez tirer des cartes face visible, vous pouvez choisir de tirer à la place le même nombre de carte de la défausse appropriée (Trésor ou Donjon). Vous devez ensuite défausser une carte de votre main pour chaque carte que vous avez tirée ainsi. Renvoi vous pouvez défausser jusqu\'à 3 cartes en combat contre une créature de type Mort-vivant. Chaque carte défausséc vous donne un bonus de +3.',
   },
   {
     id: 'd-077', name: 'Prêtre', type: CardType.Class, classId: 'cleric', image: '/cards/porte_077.jpg',
-    effect: 'Résurrection : pioche dans la défausse (défausse une carte pour chacune récupérée). Renvoi : défaussez jusqu\'à 3 cartes contre un Mort-Vivant pour +3 chacune.',
+    classResurrection: true, classTurning: true,
+    effect: 'Résurrection: quand vous devez tirer des cartes face visible, vous pouvez choisir de tirer à la place le même nombre de carte de la défausse appropriée (Trésor ou Donjon). Vous devez ensuite défausser une carte de votre main pour chaque carte que vous avez tirée ainsi. Renvoi vous pouvez défausser jusqu\'à 3 cartes en combat contre une créature de type Mort-vivant. Chaque carte défausséc vous donne un bonus de +3.',
   },
   {
     id: 'd-093', name: 'Voleur', type: CardType.Class, classId: 'thief', image: '/cards/porte_093.jpg',
@@ -452,27 +461,33 @@ const DOOR_CARDS: readonly Card[] = [
   // ── Races (3 exemplaires chacune) ─────────────────────────────────────────
   {
     id: 'd-011', name: 'Elfe', type: CardType.Race, raceId: 'elf', image: '/cards/porte_011.jpg',
-    effect: '+1 pour fuir. Quand vous aidez quelqu\'un à vaincre un monstre, vous gagnez aussi un niveau.',
+    fleeBonus: 1, raceHelperGainsLevelPerMonster: true,
+    effect: '+1 pour Déguerpir Vous gagnez un niveau pour chaque monstre que vous avez aidé à tuer.',
   },
   {
     id: 'd-012', name: 'Elfe', type: CardType.Race, raceId: 'elf', image: '/cards/porte_012.jpg',
-    effect: '+1 pour fuir. Quand vous aidez quelqu\'un à vaincre un monstre, vous gagnez aussi un niveau.',
+    fleeBonus: 1, raceHelperGainsLevelPerMonster: true,
+    effect: '+1 pour Déguerpir Vous gagnez un niveau pour chaque monstre que vous avez aidé à tuer.',
   },
   {
     id: 'd-013', name: 'Elfe', type: CardType.Race, raceId: 'elf', image: '/cards/porte_013.jpg',
-    effect: '+1 pour fuir. Quand vous aidez quelqu\'un à vaincre un monstre, vous gagnez aussi un niveau.',
+    fleeBonus: 1, raceHelperGainsLevelPerMonster: true,
+    effect: '+1 pour Déguerpir Vous gagnez un niveau pour chaque monstre que vous avez aidé à tuer.',
   },
   {
     id: 'd-028', name: 'Halfelin', type: CardType.Race, raceId: 'halfling', image: '/cards/porte_028.jpg',
-    effect: 'Peut vendre un objet par tour au double de sa valeur. Si le premier jet de fuite échoue, peut défausser une carte pour retenter.',
+    raceFleeRetry: true, raceDoubleSellFirst: true,
+    effect: 'Vous pouvez vendre un objet par tour au double de son prix (les autres objets sont au prix normal). Si vous ratez votre première tentative pour déguerpir, vous pouvez défausser une carte pour réessayer une fois.',
   },
   {
     id: 'd-029', name: 'Halfelin', type: CardType.Race, raceId: 'halfling', image: '/cards/porte_029.jpg',
-    effect: 'Peut vendre un objet par tour au double de sa valeur. Si le premier jet de fuite échoue, peut défausser une carte pour retenter.',
+    raceFleeRetry: true, raceDoubleSellFirst: true,
+    effect: 'Vous pouvez vendre un objet par tour au double de son prix (les autres objets sont au prix normal). Si vous ratez votre première tentative pour déguerpir, vous pouvez défausser une carte pour réessayer une fois.',
   },
   {
     id: 'd-030', name: 'Halfelin', type: CardType.Race, raceId: 'halfling',
-    effect: 'Peut vendre un objet par tour au double de sa valeur. Si le premier jet de fuite échoue, peut défausser une carte pour retenter.',
+    raceFleeRetry: true, raceDoubleSellFirst: true,
+    effect: 'Vous pouvez vendre un objet par tour au double de son prix (les autres objets sont au prix normal). Si vous ratez votre première tentative pour déguerpir, vous pouvez défausser une carte pour réessayer une fois.',
   },
   {
     id: 'd-065', name: 'Nain', type: CardType.Race, raceId: 'dwarf', image: '/cards/porte_065.jpg',
@@ -497,8 +512,8 @@ const DOOR_CARDS: readonly Card[] = [
     effect: 'Jouez immédiatement à la pioche : tous les Prêtres en jeu gagnent 1 niveau (peut permettre de gagner la partie).',
   },
   {
-    id: 'd-059', name: 'Monstre Errant', type: CardType.Special,
-    effect: 'Ajoute un monstre de votre main à un combat en cours ; leurs forces s\'additionnent.',
+    id: 'd-059', name: 'Monstre Errant', type: CardType.Special, addMonsterFromHand: true,
+    effect: 'A jouer, ainsi qu\'un monstre de votre main, quand quelqu\'un (vous y compris) se bat. Votre monstre rejoint celui qui combat : leurs forces de combat s\'additionnent. Si le ou les personnages doivent Déguerpir, résolvez séparément les tentatives, dans l\'ordre choisi par les victimes.',
   },
   {
     id: 'd-060', name: 'Monstre Errant', type: CardType.Special, image: '/cards/porte_060.jpg',
@@ -522,11 +537,13 @@ const DOOR_CARDS: readonly Card[] = [
   },
   {
     id: 'd-085', name: 'Super Munchkin', type: CardType.Special, image: '/cards/porte_085.jpg',
-    effect: 'Permet de posséder 2 cartes de Classe simultanément (tous avantages et inconvénients, ou avantages seuls d\'une classe au choix).',
+    isSuperMunchkin: true,
+    effect: 'En tant que super munchkin, vous pouvez posséder 2 cartes de Classe, et disposer de tous les avantages et désavantages de chacune. Vous pouvez aussi choisir de n\'avoir qu\'une Classe et d\'avoir tous ses avantages mais aucun désavantage (par exemple, les monstres qui haissent les Prêtres n\'auront aucun bonus contre les super Prêtres). Vous perdez cette carte si vous perdez votre ou vos carte(s) de Classe.',
   },
   {
     id: 'd-086', name: 'Super Munchkin', type: CardType.Special, image: '/cards/porte_086.jpg',
-    effect: 'Permet de posséder 2 cartes de Classe simultanément (tous avantages et inconvénients, ou avantages seuls d\'une classe au choix).',
+    isSuperMunchkin: true,
+    effect: 'En tant que super munchkin, vous pouvez posséder 2 cartes de Classe, et disposer de tous les avantages et désavantages de chacune. Vous pouvez aussi choisir de n\'avoir qu\'une Classe et d\'avoir tous ses avantages mais aucun désavantage (par exemple, les monstres qui haissent les Prêtres n\'auront aucun bonus contre les super Prêtres). Vous perdez cette carte si vous perdez votre ou vos carte(s) de Classe.',
   },
   {
     id: 'd-087', name: 'Tire-moi de là !', type: CardType.Special,
@@ -534,7 +551,8 @@ const DOOR_CARDS: readonly Card[] = [
   },
   {
     id: 'd-088', name: 'Tricheur !', type: CardType.Special, image: '/cards/porte_088.jpg',
-    effect: 'Permet d\'utiliser un objet normalement interdit (race, classe ou sexe). Se pose à côté de l\'objet concerné.',
+    bypassesItemRestrictions: true,
+    effect: 'Vous pouvez posséder et utiliser 1 objet qui vous serait normalement interdit par les règles. Posez cette carte à côté de l\'objet que vous jouez de votre main ou que vous avez déjà en jeu. Si vous perdez cet objet, cette carte est défaussée avec.',
   },
 ];
 
@@ -552,8 +570,8 @@ const TREASURE_CARDS: readonly Card[] = [
   },
   {
     id: 't-026', name: 'Don de Chips Désintéressé au MJ', type: CardType.Treasure, image: '/cards/tresor_026.jpg',
-    power: 1, levelUp: 1,
-    effect: '+1 en combat. Peut être défaussée pour gagner 1 niveau.',
+    levelUp: 1,
+    effect: 'Gagnez un niveau.',
   },
   {
     id: 't-034', name: 'Erreur de Calcul Avantageuse', type: CardType.Treasure, image: '/cards/tresor_034.jpg',
@@ -587,8 +605,8 @@ const TREASURE_CARDS: readonly Card[] = [
   },
   {
     id: 't-072', name: 'Tuer le Fidèle Serviteur', type: CardType.Treasure, image: '/cards/tresor_072.jpg',
-    power: 1, levelUp: 1,
-    effect: '+1 en combat. Peut être défaussée pour gagner 1 niveau (le Fidèle Serviteur en jeu est défaussé).',
+    levelUp: 1, requiresLoyalServantInPlay: true, discardLoyalServantOnPlay: true,
+    effect: 'Jouable uniquement si le Fidèle Serviteur est en jeu. Le Fidèle Serviteur est défaussé. Gagnez un niveau.',
   },
   {
     id: 't-073', name: 'Vol de Niveau', type: CardType.Treasure, image: '/cards/tresor_073.jpg',
@@ -604,7 +622,7 @@ const TREASURE_CARDS: readonly Card[] = [
   },
   {
     id: 't-012', name: 'Bâton de Napalm', type: CardType.Treasure, image: '/cards/tresor_012.jpg',
-    power: 5, handUsage: 1, requiredClass: 'wizard', goldValue: 800,
+    power: 5, handUsage: 1, requiredClass: 'wizard', goldValue: 800, itemTags: ['staff'],
     effect: 'Arme à 1 main. Magicien uniquement.',
   },
   {
@@ -649,7 +667,7 @@ const TREASURE_CARDS: readonly Card[] = [
   },
   {
     id: 't-044', name: 'Lance de 3,50 m', type: CardType.Treasure, image: '/cards/tresor_044.jpg',
-    power: 1, handUsage: 2, goldValue: 200,
+    power: 1, handUsage: 2, goldValue: 200, itemTags: ['lance'],
     effect: 'Arme à 2 mains.',
   },
   {
@@ -701,7 +719,7 @@ const TREASURE_CARDS: readonly Card[] = [
   },
   {
     id: 't-007', name: 'Armure de Mithril', type: CardType.Treasure, image: '/cards/tresor_007.jpg',
-    power: 3, equipSlot: 'armor', goldValue: 600, isBigItem: true,
+    power: 3, equipSlot: 'armor', forbiddenClass: 'wizard', goldValue: 600, isBigItem: true,
     effect: 'Gros objet. Armure. Interdite au Magicien.',
   },
   {
@@ -789,7 +807,7 @@ const TREASURE_CARDS: readonly Card[] = [
   {
     id: 't-050', name: 'Oh, Les Jolis Ballons !', type: CardType.Treasure, image: '/cards/tresor_050.jpg',
     power: 5, goldValue: 0, isOneShot: true,
-    effect: '+5 en combat pour le camp de votre choix (distraction). Usage unique.',
+    effect: 'A jouer pendant n\'importe quel combat pour distraire l\'ennemi. Bonus de +5 accordé à un camp au choix. Usage unique.',
   },
   {
     id: 't-069', name: 'Titre qui en Jette Vraiment Grave', type: CardType.Treasure, image: '/cards/tresor_069.jpg',
@@ -810,7 +828,7 @@ const TREASURE_CARDS: readonly Card[] = [
   },
   {
     id: 't-010', name: 'Baguette de Sourcier', type: CardType.Treasure, image: '/cards/tresor_010.jpg',
-    isOneShot: true, searchDiscard: true, goldValue: 1100,
+    isOneShot: true, searchDiscard: true, goldValue: 1100, itemTags: ['wand'],
     effect: 'Parcourez les défausses pour trouver la carte de votre choix. Prenez-la et défaussez la baguette de sourcier.',
   },
   {
@@ -820,12 +838,12 @@ const TREASURE_CARDS: readonly Card[] = [
   },
   {
     id: 't-028', name: 'Dé Pipé', type: CardType.Treasure, image: '/cards/tresor_028.jpg',
-    isOneShot: true, goldValue: 300,
-    effect: 'Usage unique : après n\'importe quel jet de dé, choisissez vous-même le résultat.',
+    isOneShot: true, chooseDiceAfterRoll: true, goldValue: 300,
+    effect: 'A jouer après n\'importe quel jet de dé. Vous choisissez vous-même le résultat du jet de dé. Usage unique.',
   },
   {
     id: 't-035', name: 'Fidèle Serviteur', type: CardType.Treasure, image: '/cards/tresor_035.jpg',
-    extraBigItemSlot: true, discardForAutoFlee: true,
+    extraBigItemSlot: true, discardForAutoFlee: true, isLoyalServant: true,
     effect: 'Ce laquais qui vous suit et vous sert de porteur vous permet de porter et d\'utiliser un Gros objet supplémentaire, mais il ne se battra pas pour vous...si vous perdez votre serviteur, vous perdez aussi votre gros objet. Vous pouvez défausser votre serviteur pour vous permettre de fuir automatiquement contre n\'importe quel monstre.',
   },
   {
@@ -837,7 +855,8 @@ const TREASURE_CARDS: readonly Card[] = [
   // ── Cartes spéciales (trésor) ──────────────────────────────────────────────
   {
     id: 't-051', name: 'Pillaaaaaaage !', type: CardType.Treasure, image: '/cards/tresor_051.jpg',
-    effect: 'Tirez immédiatement 3 nouvelles cartes trésor (face cachée si cette carte a été tirée face cachée, sinon face visible).',
+    isOneShot: true, drawTreasuresOnPlay: 3,
+    effect: 'Tirez immédiatement trois nouvelles cartes de trésor. Elles sont tirées face cachée si vous avez tiré cette carte face cachée, et face visible dans le cas contraire.',
   },
 
   // ── Objets à usage unique ─────────────────────────────────────────────────
@@ -848,8 +867,8 @@ const TREASURE_CARDS: readonly Card[] = [
   },
   {
     id: 't-021', name: 'Champagne', type: CardType.Treasure, image: '/cards/tresor_021.jpg',
-    power: 2, isOneShot: true, goldValue: 100,
-    effect: '+2 à chaque Elfe engagé dans la bataille. Usage unique.',
+    isOneShot: true, requiredRace: 'elf', bonusPerAllyRace: { elf: 2 }, goldValue: 100,
+    effect: 'À jouer pendant n\'importe quel combat. Utilisable une fois, et seulement sur les Elfes. Confère un bonus de +2 à chaque Elfe engagé dans la bataille.',
   },
   {
     id: 't-036', name: 'Flaque de Colle', type: CardType.Treasure, image: '/cards/tresor_036.jpg',
@@ -876,7 +895,7 @@ const TREASURE_CARDS: readonly Card[] = [
   {
     id: 't-024', name: 'Cotion de Ponfusion', type: CardType.Treasure, image: '/cards/tresor_024.jpg',
     power: 3, isOneShot: true, goldValue: 100,
-    effect: '+3 en combat pour le camp de votre choix. Usage unique.',
+    effect: 'A jouer pendant n\'imquorte pel combat. Bonus de +3 accordé à un champ au coix. Usige unaque.',
   },
   {
     id: 't-053', name: 'Potion Acide Radioactive et Électrique', type: CardType.Treasure,
@@ -890,28 +909,28 @@ const TREASURE_CARDS: readonly Card[] = [
   },
   {
     id: 't-055', name: 'Potion d\'Amitié', type: CardType.Treasure, image: '/cards/tresor_055.jpg',
-    isOneShot: true, goldValue: 200,
-    effect: 'Usage unique en combat : défaussez tous les monstres (sans trésor pour eux) et pillez la pièce.',
+    isOneShot: true, banishAndLoot: true, goldValue: 200,
+    effect: 'A jouer pendant n\'importe quel combat. Défaussez tous les monstres combattus. Aucun trésor n\'est gagné, mais vous pouvez piller la pièce. Usage unique.',
   },
   {
     id: 't-056', name: 'Potion de Bravoure Hystérique', type: CardType.Treasure,
     power: 2, isOneShot: true, goldValue: 100,
-    effect: '+2 en combat pour le camp de votre choix. Usage unique.',
+    effect: 'A jouer pendant n\'importe quel combat. Bonus de +2 accordé à un camp au choix. Usage unique.',
   },
   {
     id: 't-058', name: 'Potion de Mauvaise Haleine', type: CardType.Treasure, image: '/cards/tresor_058.jpg',
-    power: 2, isOneShot: true, goldValue: 100,
-    effect: '+2 en combat pour le camp de votre choix. Tue instantanément le Nez Flottant. Usage unique.',
+    power: 2, isOneShot: true, instantKillMonsters: ['d-068'], goldValue: 100,
+    effect: 'A jouer pendant n\'importe quel combat. Bonus de +2 accordé à un camp au choix, ou tue instantanément le nez flottant. Usage unique.',
   },
   {
     id: 't-059', name: 'Potion de Poison Enflammé', type: CardType.Treasure, image: '/cards/tresor_059.jpg',
     power: 3, isOneShot: true, goldValue: 100,
-    effect: '+3 en combat pour le camp de votre choix. Usage unique.',
+    effect: 'A jouer pendant n\'importe quel combat. Bonus de +3 accordé à un camp au choix. Usage unique.',
   },
   {
     id: 't-060', name: 'Potion de Polly-morphie', type: CardType.Treasure, image: '/cards/tresor_060.jpg',
-    isOneShot: true, goldValue: 1300,
-    effect: 'Usage unique en combat : transforme n\'importe quel monstre en perroquet, qui s\'envole en abandonnant son trésor.',
+    isOneShot: true, banishMonster: true, goldValue: 1300,
+    effect: 'Utilisable une seule fois, pendant le combat. Transforme n\'importe quel monstre en joli perroquet appelé Polly, qui s\'envole en abandonnant son trésor. Usage unique.',
   },
   {
     id: 't-061', name: 'Potion de Sommeil', type: CardType.Treasure, image: '/cards/tresor_061.jpg',

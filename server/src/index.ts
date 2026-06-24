@@ -112,6 +112,28 @@ function buildLogEntry(
       return { playerName, description: 'passe la phase de pillage.', timestamp: ts };
     case 'END_TURN':
       return { playerName, description: 'termine son tour.', timestamp: ts };
+    case 'RESOLVE_CURSE':
+      return { playerName, description: 'résout la malédiction.', timestamp: ts };
+    case 'RESOLVE_FLEE':
+      return { playerName, description: 'subit les conséquences de la fuite.', timestamp: ts };
+    case 'RESOLVE_FLEE_SUCCESS':
+      return { playerName, description: 'fuit avec succès.', timestamp: ts };
+    case 'RETRY_FLEE':
+      return { playerName, description: 'réessaie de fuir.', timestamp: ts };
+    case 'SELL_ITEMS':
+      return { playerName, description: 'vend des objets.', timestamp: ts };
+    case 'CHOOSE_VICTIM_ITEM':
+      return { playerName, description: 'choisit un objet à défausser.', timestamp: ts };
+    case 'CHOOSE_CURSE_ITEM':
+      return { playerName, description: 'choisit l\'objet à perdre.', timestamp: ts };
+    case 'DISCARD_ITEM_TO_FLEE':
+      return { playerName, description: 'défausse un objet pour fuir.', timestamp: ts };
+    case 'SET_SUPER_MUNCHKIN_MODE':
+      return { playerName, description: `passe en mode ${action.mode === 'dual' ? 'double classe' : 'super'}.`, timestamp: ts };
+    case 'WIZARD_CHARM':
+      return { playerName, description: 'charme un monstre (sort de charme).', timestamp: ts };
+    default:
+      return { playerName, description: 'joue une action.', timestamp: ts };
   }
 }
 

@@ -1,16 +1,26 @@
 import type { Card, Player } from '@munchkin/shared';
-import { playerRace, playerClass } from '@munchkin/shared';
+import { playerRace, playerClass, playerClasses } from '@munchkin/shared';
 import type { CombatResult, LevelChange } from './types.js';
 import { DeckManager } from './DeckManager.js';
 
 function equipmentBonus(player: Player): number {
   const race = playerRace(player);
-  const cls = playerClass(player);
+  const classes = playerClasses(player);
+  const isSuperMunchkin = player.equipped.some(c => c.isSuperMunchkin);
+  const bypassedIds = new Set(
+    player.equipped
+      .filter(c => c.bypassesItemRestrictions && c.attachedToItemId != null)
+      .map(c => c.attachedToItemId!),
+  );
   return player.equipped.reduce((sum, c) => {
-    if (c.requiredClass != null && c.requiredClass !== cls) return sum;
-    if (c.forbiddenClass != null && c.forbiddenClass === cls) return sum;
-    if (c.requiredRace != null && c.requiredRace !== race) return sum;
-    if (c.requiredNoRace && race != null) return sum;
+    if (c.bypassesItemRestrictions) return sum;
+    const bypassed = bypassedIds.has(c.id);
+    if (!bypassed) {
+      if (c.requiredClass != null && !classes.includes(c.requiredClass)) return sum;
+      if (!isSuperMunchkin && c.forbiddenClass != null && classes.includes(c.forbiddenClass)) return sum;
+      if (c.requiredRace != null && c.requiredRace !== race) return sum;
+      if (c.requiredNoRace && race !== 'human') return sum;
+    }
     const base = c.power ?? 0;
     const raceBonus = c.racePowerBonus?.[race] ?? 0;
     return sum + base + raceBonus;
@@ -19,7 +29,7 @@ function equipmentBonus(player: Player): number {
 
 /** Warrior class: +1 per level above 5, minimum 0. */
 function classBonus(player: Player): number {
-  return playerClass(player) === 'warrior' ? Math.max(0, player.level - 5) : 0;
+  return playerClasses(player).includes('warrior') ? Math.max(0, player.level - 5) : 0;
 }
 
 function helperBonus(helpers: Player[]): number {
@@ -28,6 +38,17 @@ function helperBonus(helpers: Player[]): number {
 
 function bonusItemsTotal(items: Card[]): number {
   return items.reduce((sum, c) => sum + (c.power ?? 0), 0);
+}
+
+function allyRaceBonus(items: Card[], player: Player, helpers: Player[]): number {
+  const participants = [player, ...helpers];
+  return items.reduce((sum, c) => {
+    if (!c.bonusPerAllyRace) return sum;
+    return sum + Object.entries(c.bonusPerAllyRace).reduce((s, [race, bonus]) => {
+      const count = participants.filter(p => playerRace(p) === race).length;
+      return s + (bonus ?? 0) * count;
+    }, 0);
+  }, 0);
 }
 
 /** Treasures earned on victory — uses card data when available, otherwise derived from power. */
@@ -56,19 +77,37 @@ export const CombatResolver = {
     helpers: Player[],
     bonusItems: Card[],
     treasureDeck: Card[],
+    rawLevelOnly = false,
+    extraPlayerPower = 0,
+    skipTreasureDraw = false,
   ): CombatResult & { newTreasureDeck: Card[] } {
-    const baseStrength = player.level + equipmentBonus(player) + classBonus(player);
-    const hasDoubler = bonusItems.some(c => c.doublesPlayerStrength);
+    const baseStrength = rawLevelOnly
+      ? player.level
+      : player.level + equipmentBonus(player) + classBonus(player);
+    const hasDoubler = !rawLevelOnly && bonusItems.some(c => c.doublesPlayerStrength);
     const multiplier = hasDoubler && helpers.length === 0 ? 2 : 1;
-    const regularBonusItems = bonusItems.filter(c => !c.doublesPlayerStrength);
+    const regularBonusItems = rawLevelOnly ? [] : bonusItems.filter(c => !c.doublesPlayerStrength);
     const playerTotal =
       baseStrength * multiplier +
       helperBonus(helpers) +
-      bonusItemsTotal(regularBonusItems);
+      bonusItemsTotal(regularBonusItems) +
+      allyRaceBonus(regularBonusItems, player, helpers) +
+      extraPlayerPower;
 
-    const monsterPower = monster.power ?? 0;
+    const activeRace = playerRace(player);
+    const monsterRaceBonus = monster.powerBonusVsRace?.[activeRace] ?? 0;
+    // Super Munchkin in super mode: monster gets no class-based bonus
+    const isSuperMode = player.superMunchkinMode === 'super' &&
+      player.equipped.some(c => c.isSuperMunchkin);
+    const monsterClassBonus = isSuperMode ? 0 :
+      playerClasses(player).reduce((sum, cls) => sum + (monster.powerBonusVsClass?.[cls] ?? 0), 0);
+    const monsterPower = (monster.power ?? 0) + monsterRaceBonus + monsterClassBonus;
 
-    if (playerTotal > monsterPower) {
+    const hasTiebreaker = player.equipped.some(c => c.classWarriorTiebreaker);
+    if (playerTotal > monsterPower || (hasTiebreaker && playerTotal === monsterPower)) {
+      if (skipTreasureDraw) {
+        return { winner: 'player', playerGains: [], newTreasureDeck: treasureDeck };
+      }
       const count = treasureCount(monster);
       const { cards: playerGains, newDeck: newTreasureDeck } = DeckManager.draw(
         treasureDeck,
@@ -85,4 +124,5 @@ export const CombatResolver = {
   },
 
   badStuffLevelLoss,
+  treasureCount,
 } as const;
