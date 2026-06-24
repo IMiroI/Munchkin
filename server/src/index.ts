@@ -214,7 +214,7 @@ io.on('connection', (socket) => {
       dDeck = d;
       const { cards: treasureCards, newDeck: t } = DeckManager.draw(tDeck, 4);
       tDeck = t;
-      return { id: p.id, name: p.name, level: 1, combatPower: 1, hand: [...doorCards, ...treasureCards], equipped: [] };
+      return { id: p.id, name: p.name, level: 1, combatPower: 1, hand: [...doorCards, ...treasureCards], equipped: [], gender: p.gender ?? 'male' };
     });
 
     const initialState: GameState = {
@@ -244,6 +244,8 @@ io.on('connection', (socket) => {
 
       const action: GameAction = clientAction.type === 'RUN_AWAY'
         ? { type: 'RUN_AWAY', dieRoll: Math.ceil(Math.random() * 6) }
+        : clientAction.type === 'THIEF_PICKPOCKET'
+        ? { ...clientAction, dieRoll: Math.ceil(Math.random() * 6) }
         : clientAction;
 
       if (!TurnManager.validateAction(state, playerId, action)) {

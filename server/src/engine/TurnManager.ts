@@ -1,4 +1,4 @@
-import { GamePhase, CardType, playerRace, playerClass, playerClasses } from '@munchkin/shared';
+import { GamePhase, CardType, playerRace, playerRaces, playerClass, playerClasses } from '@munchkin/shared';
 import type { GameState, Player, Card, CurseEffect } from '@munchkin/shared';
 import { DeckManager } from './DeckManager.js';
 import { CombatResolver } from './CombatResolver.js';
@@ -66,9 +66,70 @@ function removeSuperMunchkinIfClassless(equipped: Card[]): { equipped: Card[]; r
 }
 
 /**
+ * If equipped has no Race card remaining and Sang-mêlé is present, remove it too.
+ */
+function removeSangMeleIfRaceless(equipped: Card[]): { equipped: Card[]; removedSangMele?: Card } {
+  const hasRace = equipped.some(c => c.type === CardType.Race);
+  if (hasRace) return { equipped };
+  const sm = equipped.find(c => c.isSangMele);
+  if (!sm) return { equipped };
+  return { equipped: equipped.filter(c => !c.isSangMele), removedSangMele: sm };
+}
+
+/**
  * When equipped items are removed, also pull any attached cards (bypassesItemRestrictions).
  * Returns the attachment cards that must be added to discardDoor.
  */
+function fleeSuccessPenaltyFor(monster: Card, playerLevel: number): number {
+  const p = monster.fleeSuccessPenalty ?? 0;
+  if (p === 0) return 0;
+  return playerLevel > (monster.fleeSuccessPenaltyMinLevel ?? 0) ? p : 0;
+}
+
+function processGoldMatchQueue(state: GameState, target: number, queue: string[]): GameState {
+  if (queue.length === 0) {
+    return { ...state, phase: GamePhase.Loot, pendingGoldMatchTarget: undefined, pendingGoldMatchQueue: undefined };
+  }
+  const [currentId, ...rest] = queue;
+  const currentPlayer = getPlayer(state, currentId!);
+  if (!currentPlayer) return processGoldMatchQueue(state, target, rest);
+  const totalGold = currentPlayer.equipped.reduce((sum, c) => sum + (c.goldValue ?? 0), 0);
+  if (totalGold < target) {
+    const lostTreasure = currentPlayer.equipped.filter(c => c.type === CardType.Treasure);
+    const lostDoor = currentPlayer.equipped.filter(c => c.type !== CardType.Treasure);
+    const stripped = withCombatPower({
+      ...currentPlayer, equipped: [], level: Math.max(1, currentPlayer.level - 1),
+    });
+    const nextState = {
+      ...updatePlayer(state, stripped),
+      discardTreasure: [...state.discardTreasure, ...lostTreasure],
+      discardDoor: [...state.discardDoor, ...lostDoor],
+    };
+    return processGoldMatchQueue(nextState, target, rest);
+  }
+  return { ...state, phase: GamePhase.CurseGoldMatch, pendingGoldMatchTarget: target, pendingGoldMatchQueue: queue };
+}
+
+function enterMonsterFight(state: GameState, monster: Card): GameState {
+  const activePlayer = getPlayer(state, state.currentPlayerId)!;
+  // avoidsGenderCondition: female player or player who changed gender gets 1 treasure instead of fighting
+  if (monster.avoidsGenderCondition &&
+      (activePlayer.gender === 'female' || activePlayer.hasChangedGender)) {
+    const { cards: drawn, newDeck } = DeckManager.draw(state.treasureDeck, 1);
+    const updatedPlayer = { ...activePlayer, hand: [...activePlayer.hand, ...drawn] };
+    return {
+      ...updatePlayer(state, updatedPlayer),
+      phase: GamePhase.Loot,
+      treasureDeck: newDeck,
+      discardDoor: [...state.discardDoor, monster],
+    };
+  }
+  if (monster.requiresPreCombatDiscard && activePlayer.equipped.length > 0) {
+    return { ...state, phase: GamePhase.PreCombatDiscard, currentMonster: monster };
+  }
+  return { ...state, phase: GamePhase.MonsterFight, currentMonster: monster };
+}
+
 function splitAttachments(
   equipped: Card[],
   removedIds: ReadonlySet<string>,
@@ -87,11 +148,11 @@ function splitAttachments(
 }
 
 /** After combat, return to the original player for Loot if combat was transferred, else go to Charity. */
-function postCombatTransition(state: GameState): Pick<GameState, 'phase' | 'currentPlayerId' | 'transferOriginalPlayerId'> {
+function postCombatTransition(state: GameState): Pick<GameState, 'phase' | 'currentPlayerId' | 'transferOriginalPlayerId' | 'combatBackstabPenalty' | 'backstabLog'> {
   if (state.transferOriginalPlayerId) {
-    return { phase: GamePhase.Loot, currentPlayerId: state.transferOriginalPlayerId, transferOriginalPlayerId: undefined };
+    return { phase: GamePhase.Loot, currentPlayerId: state.transferOriginalPlayerId, transferOriginalPlayerId: undefined, combatBackstabPenalty: undefined, backstabLog: undefined };
   }
-  return { phase: GamePhase.Charity, currentPlayerId: state.currentPlayerId, transferOriginalPlayerId: undefined };
+  return { phase: GamePhase.Charity, currentPlayerId: state.currentPlayerId, transferOriginalPlayerId: undefined, combatBackstabPenalty: undefined, backstabLog: undefined };
 }
 
 /** After a successful flee, enter FleeSuccessReaction so rerollFlee cards can be played. */
@@ -143,61 +204,17 @@ function applyCurse(
       };
     }
 
-    case 'lose-race':
+    case 'lose-race': {
+      const withoutRace = player.equipped.filter(c => c.type !== CardType.Race);
+      const { equipped: afterSangMele, removedSangMele } = removeSangMeleIfRaceless(withoutRace);
       return {
-        player: withCombatPower({
-          ...player,
-          equipped: player.equipped.filter(c => c.type !== CardType.Race),
-        }),
-      };
-
-    case 'duck-of-doom': {
-      const powerItems = player.equipped.filter(
-        c => c.type === CardType.Treasure && c.power != null,
-      );
-      const most = powerItems.reduce<Card | undefined>(
-        (best, c) => (!best || (c.power ?? 0) > (best.power ?? 0) ? c : best),
-        undefined,
-      );
-      if (!most) return { player };
-      const { kept: keptD, detachedDoor: detD } = splitAttachments(player.equipped, new Set([most.id]));
-      return {
-        player: withCombatPower({ ...player, equipped: keptD }),
-        discardedTreasure: most,
-        detachedDoorCards: detD.length > 0 ? detD : undefined,
+        player: withCombatPower({ ...player, equipped: afterSangMele }),
+        detachedDoorCards: removedSangMele ? [removedSangMele] : undefined,
       };
     }
 
-    case 'lose-big-item': {
-      const bigItems = player.equipped.filter(c => c.type === CardType.Treasure && c.isBigItem);
-      if (bigItems.length === 0) return { player };
-      const item = bigItems[0]!;
-      const { kept: keptB, detachedDoor: detB } = splitAttachments(player.equipped, new Set([item.id]));
-      return {
-        player: withCombatPower({ ...player, equipped: keptB }),
-        discardedTreasure: item,
-        detachedDoorCards: detB.length > 0 ? detB : undefined,
-      };
-    }
-
-    case 'lose-small-item': {
-      const smallItems = player.equipped.filter(
-        c => c.type === CardType.Treasure && !c.isBigItem && c.power != null,
-      );
-      if (smallItems.length === 0) return { player };
-      const item = smallItems[0]!;
-      const { kept: keptS, detachedDoor: detS } = splitAttachments(player.equipped, new Set([item.id]));
-      return {
-        player: withCombatPower({ ...player, equipped: keptS }),
-        discardedTreasure: item,
-        detachedDoorCards: detS.length > 0 ? detS : undefined,
-      };
-    }
-
-    case 'lose-two-cards': {
-      // Simplified: remove first 2 cards from hand.
-      return { player: { ...player, hand: player.hand.slice(2) } };
-    }
+    case 'duck-of-doom':
+      return { player: withCombatPower({ ...player, level: Math.max(1, player.level - 2) }) };
 
     case 'lose-headgear': {
       const headgearItem = player.equipped.find(c => c.equipSlot === 'headgear');
@@ -214,6 +231,41 @@ function applyCurse(
         detachedDoorCards: detH.length > 0 ? detH : undefined,
       };
     }
+
+    case 'lose-armor': {
+      const armorItem = player.equipped.find(c => c.equipSlot === 'armor');
+      if (!armorItem) return { player };
+      const { kept: keptA, detachedDoor: detA } = splitAttachments(player.equipped, new Set([armorItem.id]));
+      return {
+        player: withCombatPower({ ...player, equipped: keptA }),
+        discardedTreasure: armorItem,
+        detachedDoorCards: detA.length > 0 ? detA : undefined,
+      };
+    }
+
+    case 'lose-footwear': {
+      const footwearItem = player.equipped.find(c => c.equipSlot === 'footwear');
+      if (!footwearItem) return { player };
+      const { kept: keptF, detachedDoor: detF } = splitAttachments(player.equipped, new Set([footwearItem.id]));
+      return {
+        player: withCombatPower({ ...player, equipped: keptF }),
+        discardedTreasure: footwearItem,
+        detachedDoorCards: detF.length > 0 ? detF : undefined,
+      };
+    }
+
+    case 'change-gender':
+      return {
+        player: {
+          ...player,
+          gender: player.gender === 'male' ? 'female' : 'male',
+          hasChangedGender: true,
+          nextCombatPenalty: (player.nextCombatPenalty ?? 0) + 5,
+        },
+      };
+
+    case 'no-item-bonus-next-combat':
+      return { player: { ...player, nextCombatNoItemBonus: true } };
 
     default:
       return { player };
@@ -271,6 +323,7 @@ export const TurnManager = {
           (state.phase === GamePhase.MonsterFight || state.phase === GamePhase.ForcedFlee) &&
           state.currentMonster != null;
         if (!canRunAway) return false;
+        if (state.currentMonster?.noFlee) return false;
         if (state.phase === GamePhase.ForcedFlee && state.pendingDiceChooserPlayerId != null) {
           return playerId === state.pendingDiceChooserPlayerId;
         }
@@ -307,9 +360,93 @@ export const TurnManager = {
       case 'AVOID_MONSTER': {
         if (!isActivePlayer || state.phase !== GamePhase.MonsterFight) return false;
         const monster = state.currentMonster;
-        if (!monster?.avoidable) return false;
+        if (!monster) return false;
+        // avoidsThief: thief players can always avoid this monster
+        if (monster.avoidsThief && playerClasses(getPlayer(state, playerId)!).includes('thief')) return true;
+        if (!monster.avoidable) return false;
         if (monster.halflingMustFight && playerRace(getPlayer(state, playerId)!) === 'halfling') return false;
         return true;
+      }
+
+      case 'BRIBE_MONSTER': {
+        if (!isActivePlayer || state.phase !== GamePhase.MonsterFight) return false;
+        const bribeMonster = state.currentMonster;
+        if (!bribeMonster?.bribeToAvoidGoldValue) return false;
+        const bribePlayer = getPlayer(state, playerId)!;
+        const bribeItem = bribePlayer.equipped.find(c => c.id === action.discardItemId);
+        return bribeItem != null && (bribeItem.goldValue ?? 0) >= bribeMonster.bribeToAvoidGoldValue;
+      }
+
+      case 'THIEF_SWAP_TREASURES': {
+        if (!isActivePlayer || state.phase !== GamePhase.MonsterFight) return false;
+        const monster = state.currentMonster;
+        if (!monster?.thiefTreasureSwapCount) return false;
+        const p = getPlayer(state, playerId)!;
+        if (!playerClasses(p).includes('thief')) return false;
+        const allCards = [...p.equipped, ...p.hand];
+        const selected = action.discardCardIds.map(id => allCards.find(c => c.id === id)).filter(Boolean);
+        if (selected.length !== monster.thiefTreasureSwapCount) return false;
+        return selected.every(c => c!.type === CardType.Treasure);
+      }
+
+      case 'THIEF_BACKSTAB': {
+        if (isActivePlayer || state.phase !== GamePhase.MonsterFight) return false;
+        const thief = getPlayer(state, playerId)!;
+        if (!thief.equipped.some(c => c.classBackstab)) return false;
+        if (!thief.hand.some(c => c.id === action.discardCardId)) return false;
+        if (action.targetPlayerId === playerId) return false;
+        if (!state.players.some(p => p.id === action.targetPlayerId)) return false;
+        // Once per victim per thief
+        const alreadyStabbed = (state.backstabLog ?? []).some(
+          e => e.thiefId === playerId && e.victimId === action.targetPlayerId,
+        );
+        return !alreadyStabbed;
+      }
+
+      case 'THIEF_PICKPOCKET': {
+        if (isActivePlayer || state.phase !== GamePhase.MonsterFight) return false;
+        const thief = getPlayer(state, playerId)!;
+        if (!thief.equipped.some(c => c.classPickpocket)) return false;
+        if (!thief.hand.some(c => c.id === action.discardCardId)) return false;
+        if (action.targetPlayerId === playerId) return false;
+        const target = getPlayer(state, action.targetPlayerId);
+        if (!target) return false;
+        return target.equipped.some(
+          c => c.id === action.targetItemId && c.type === CardType.Treasure && !c.isBigItem,
+        );
+      }
+
+      case 'MATCH_GOLD_VALUE': {
+        if (state.phase !== GamePhase.CurseGoldMatch) return false;
+        if (state.pendingGoldMatchQueue?.[0] !== playerId) return false;
+        const p = getPlayer(state, playerId)!;
+        const target = state.pendingGoldMatchTarget ?? 0;
+        const selected = action.cardIds.map(id => p.equipped.find(c => c.id === id)).filter(Boolean) as typeof p.equipped;
+        if (selected.length !== action.cardIds.length) return false;
+        return selected.reduce((sum, c) => sum + (c.goldValue ?? 0), 0) >= target;
+      }
+
+      case 'DISCARD_ITEMS_FOR_GOLD': {
+        if (!isActivePlayer || state.phase !== GamePhase.BadStuffGoldDiscard) return false;
+        const p = getPlayer(state, playerId)!;
+        const required = state.pendingGoldDiscardRequired ?? 0;
+        const selected = action.cardIds.map(id => p.equipped.find(c => c.id === id)).filter(Boolean) as typeof p.equipped;
+        if (selected.length !== action.cardIds.length) return false;
+        const total = selected.reduce((sum, c) => sum + (c.goldValue ?? 0), 0);
+        return total >= required;
+      }
+
+      case 'DISCARD_PRE_COMBAT_ITEM': {
+        if (!isActivePlayer || state.phase !== GamePhase.PreCombatDiscard) return false;
+        const p = getPlayer(state, playerId)!;
+        return p.equipped.some(c => c.id === action.cardId);
+      }
+
+      case 'PRIEST_CLAIM_TREASURE': {
+        if (!isActivePlayer || state.phase !== GamePhase.MonsterFight) return false;
+        if (!state.currentMonster?.priestCanClaimTreasure) return false;
+        const p = getPlayer(state, playerId)!;
+        return playerClasses(p).includes('cleric');
       }
 
       case 'WIZARD_CHARM': {
@@ -334,7 +471,15 @@ export const TurnManager = {
         if (state.phase !== GamePhase.NeighborItemRemoval) return false;
         if (state.neighborDiscardQueue?.[0] !== playerId) return false;
         const target = state.players.find(p => p.id === state.neighborDiscardTarget);
-        return target?.equipped.some(c => c.id === action.targetItemId) ?? false;
+        if (!target) return false;
+        if (state.neighborPickFromHandOnly) {
+          return target.hand.some(c => c.id === action.targetItemId);
+        }
+        const inEquipped = target.equipped.some(c => c.id === action.targetItemId);
+        const inHand = state.neighborPickIncludesHand
+          ? target.hand.some(c => c.id === action.targetItemId)
+          : false;
+        return inEquipped || inHand;
       }
 
       case 'CHOOSE_CURSE_ITEM':
@@ -347,6 +492,11 @@ export const TurnManager = {
       case 'SET_SUPER_MUNCHKIN_MODE': {
         const p = getPlayer(state, playerId)!;
         return p.equipped.some(c => c.isSuperMunchkin);
+      }
+
+      case 'SET_SANG_MELE_MODE': {
+        const p = getPlayer(state, playerId)!;
+        return p.equipped.some(c => c.isSangMele);
       }
 
       case 'DISCARD_ITEM_TO_FLEE': {
@@ -365,6 +515,17 @@ export const TurnManager = {
         const p = getPlayer(state, playerId)!;
         const hasRetry = p.equipped.some(c => c.raceFleeRetry);
         return hasRetry && p.hand.some(c => c.id === action.discardedCardId);
+      }
+
+      case 'RESOLVE_DIE_ROLL_LOSS': {
+        if (state.phase !== GamePhase.BadStuffDieRollLoss) return false;
+        if (!isActivePlayer) return false;
+        const p = getPlayer(state, playerId)!;
+        const count = state.pendingDieRollLossCount ?? 0;
+        if (action.cardIds.length !== Math.min(count, action.source === 'equipped' ? p.equipped.length : p.hand.length)) return false;
+        const ids = new Set(action.cardIds);
+        if (action.source === 'equipped') return action.cardIds.every(id => p.equipped.some(c => c.id === id));
+        return action.cardIds.every(id => p.hand.some(c => c.id === id));
       }
 
       case 'SELL_ITEMS': {
@@ -422,6 +583,13 @@ export const TurnManager = {
         // autoFlee cards can be played by the active player during FleeReaction
         if (card.autoFlee) {
           return isActivePlayer && state.phase === GamePhase.FleeReaction;
+        }
+
+        // autoFleeEarly: playable during MonsterFight or FleeReaction
+        if (card.autoFleeEarly) {
+          return isActivePlayer &&
+            (state.phase === GamePhase.MonsterFight || state.phase === GamePhase.FleeReaction) &&
+            state.currentMonster != null;
         }
 
         // rerollFlee cards can be played by any player during FleeSuccessReaction
@@ -489,6 +657,24 @@ export const TurnManager = {
           return target != null && target.id !== playerId;
         }
 
+        // levelUpAllByClass: playable by any player at any time
+        if (card.levelUpAllByClass) return true;
+
+        // banishAllMonstersDrawTreasures: playable by any player during MonsterFight
+        if (card.banishAllMonstersDrawTreasures != null) {
+          return state.phase === GamePhase.MonsterFight && state.currentMonster != null;
+        }
+
+        // replacesMonsterInCombat: targetId = monster to replace, replacementCardId = monster from hand
+        if (card.replacesMonsterInCombat) {
+          if (state.phase !== GamePhase.MonsterFight) return false;
+          const allMonsters = [state.currentMonster, ...(state.additionalMonsters ?? [])];
+          if (!allMonsters.some(m => m?.id === action.targetId)) return false;
+          if (!action.replacementCardId) return false;
+          const p = getPlayer(state, playerId)!;
+          return p.hand.some(c => c.id === action.replacementCardId && c.type === CardType.Monster);
+        }
+
         // forcedHelper: active player, MonsterFight, target must have higher level than active player
         if (card.forcedHelper) {
           if (!isActivePlayer || state.phase !== GamePhase.MonsterFight) return false;
@@ -522,11 +708,22 @@ export const TurnManager = {
           (card.type === CardType.Treasure && card.power != null && !card.isOneShot && card.levelUp == null);
         if (isEquippable) {
           const classes = playerClasses(player);
+          const races = playerRaces(player);
           const hasSuperMunchkin = player.equipped.some(c => c.isSuperMunchkin);
+          const hasSangMele = player.equipped.some(c => c.isSangMele);
+          const isSangMeleSuperMode = hasSangMele && player.sangMeleMode === 'super';
           if (card.requiredClass != null && !classes.includes(card.requiredClass)) return false;
           if (!hasSuperMunchkin && card.forbiddenClass != null && classes.includes(card.forbiddenClass)) return false;
-          if (card.requiredRace != null && playerRace(player) !== card.requiredRace) return false;
-          if (card.requiredNoRace && playerRace(player) != null) return false;
+          if (card.requiredRace != null && !races.includes(card.requiredRace)) return false;
+          if (!isSangMeleSuperMode && card.forbiddenRace != null && races.includes(card.forbiddenRace)) return false;
+          if (card.requiredNoRace && playerRace(player) !== 'human') return false;
+          if (card.requiredCurrentGender != null && player.gender !== card.requiredCurrentGender) return false;
+          // Race card: max 1 normally; max 2 with Sang-mêlé
+          if (card.type === CardType.Race) {
+            const currentRaceCount = player.equipped.filter(c => c.type === CardType.Race).length;
+            if (currentRaceCount >= 1 && !hasSangMele) return false;
+            if (currentRaceCount >= 2) return false;
+          }
           if (card.handUsage != null) {
             const replaceIds = new Set(action.replaceEquippedIds ?? []);
             const handsAfterRemoval = player.equipped.reduce(
@@ -535,8 +732,8 @@ export const TurnManager = {
             );
             if (handsAfterRemoval + card.handUsage > 2) return false;
           }
-          // Big-item limit: max 1, +1 per extraBigItemSlot equipped
-          if (card.isBigItem) {
+          // Big-item limit: max 1, +1 per extraBigItemSlot; bypassed if raceUnlimitedBigItems
+          if (card.isBigItem && !player.equipped.some(c => c.raceUnlimitedBigItems)) {
             const extraSlots = player.equipped.filter(c => c.extraBigItemSlot).length;
             const currentBigItems = player.equipped.filter(c => c.isBigItem).length;
             if (currentBigItems >= 1 + extraSlots) return false;
@@ -572,6 +769,42 @@ export const TurnManager = {
           );
         }
 
+        // clonesCurrentMonster (d-071): any player may play during MonsterFight to clone the monster
+        if (card.clonesCurrentMonster) {
+          return state.phase === GamePhase.MonsterFight && state.currentMonster != null;
+        }
+
+        // Steal-item-if-win-condition (d-087): take one equipped item from another player during combat
+        // Valid only if: stealing the item (after optional own-item discard) tips combat from loss to win
+        if (card.stealItemIfWinCondition) {
+          if (!isActivePlayer || state.phase !== GamePhase.MonsterFight) return false;
+          if (!state.currentMonster) return false;
+          const targetPlayer = state.players.find(p => p.id === action.targetPlayerId);
+          if (!targetPlayer || targetPlayer.id === playerId) return false;
+          const stolenItem = targetPlayer.equipped.find(c => c.id === action.targetId);
+          if (!stolenItem) return false;
+          // optional pre-discard: at most one own equipped item
+          if (action.replaceEquippedIds && action.replaceEquippedIds.length > 1) return false;
+          const discardId = action.replaceEquippedIds?.[0];
+          if (discardId && !player.equipped.some(c => c.id === discardId)) return false;
+          // build effective monster (including bonus cards from play zone)
+          const mb87Power = (state.combatMonsterBonusCards ?? []).reduce((s, c2) => s + (c2.power ?? 0), 0);
+          const eff87Monster = { ...state.currentMonster, power: (state.currentMonster.power ?? 0) + mb87Power };
+          const bonus87Cards = state.combatBonusCards ?? [];
+          // "before": equipped minus optional discard
+          const equipped87Before = discardId
+            ? player.equipped.filter(c => c.id !== discardId)
+            : player.equipped;
+          const player87Before = withCombatPower({ ...player, equipped: equipped87Before });
+          const result87Before = CombatResolver.resolveCombat(player87Before, eff87Monster, [], bonus87Cards, [], false, 0, true);
+          if (result87Before.winner === 'player') return false; // was already winning — card can't be played
+          // "after": add stolen item
+          const equipped87After = [...equipped87Before, stolenItem];
+          const player87After = withCombatPower({ ...player, equipped: equipped87After });
+          const result87After = CombatResolver.resolveCombat(player87After, eff87Monster, [], bonus87Cards, [], false, 0, true);
+          return result87After.winner === 'player';
+        }
+
         // Steal-level cards require a valid target (another player)
         if (card.stealLevel) {
           const target = state.players.find(p => p.id === action.targetId);
@@ -603,7 +836,9 @@ export const TurnManager = {
       case 'END_TURN': {
         if (!isActivePlayer || state.phase !== GamePhase.Charity) return false;
         const player = getPlayer(state, playerId);
-        return player != null && player.hand.length <= 5;
+        if (!player) return false;
+        const handSizeBonus = player.equipped.reduce((sum, c) => sum + (c.raceHandSizeBonus ?? 0), 0);
+        return player.hand.length <= 5 + handSizeBonus;
       }
 
       default:
@@ -623,7 +858,7 @@ export const TurnManager = {
         const activePlayer = getPlayer(state, state.currentPlayerId)!;
 
         if (card.type === CardType.Monster) {
-          return { ...base, phase: GamePhase.MonsterFight, currentMonster: card };
+          return enterMonsterFight(base, card);
         }
 
         if (card.type === CardType.DoorCurse) {
@@ -665,11 +900,7 @@ export const TurnManager = {
           ...activePlayer,
           hand: activePlayer.hand.filter(c => c.id !== action.monsterId),
         };
-        return {
-          ...updatePlayer(state, updatedPlayer),
-          phase: GamePhase.MonsterFight,
-          currentMonster: monster,
-        };
+        return enterMonsterFight(updatePlayer(state, updatedPlayer), monster);
       }
 
       // ---------------------------------------------------------------
@@ -709,28 +940,53 @@ export const TurnManager = {
         );
         const monster = {
           ...state.currentMonster!,
-          power: (state.currentMonster!.power ?? 0) + monsterBonusPower + additionalMonsterPower,
+          power: Math.max(1, (state.currentMonster!.power ?? 0) + monsterBonusPower + additionalMonsterPower),
         };
 
         const hasPriestResurrection = activePlayer.equipped.some(c => c.classResurrection);
+        const genderPenalty = activePlayer.nextCombatPenalty ?? 0;
+        // d-052: no item bonus next combat — strip equipped to armor only, ignore one-shot bonus cards
+        const combatPlayer = activePlayer.nextCombatNoItemBonus
+          ? withCombatPower({ ...activePlayer, equipped: activePlayer.equipped.filter(c => c.equipSlot === 'armor') })
+          : activePlayer;
+        const combatBonusCards = activePlayer.nextCombatNoItemBonus ? [] : allBonusCards;
+        // include race/class bonuses from additional monsters (e.g. d-071 clones current monster)
+        const additionalMonsterRaceClassBonus = (state.additionalMonsters ?? []).reduce((sum, m) => {
+          const raceBonus = playerRaces(combatPlayer).reduce((s, race) => s + (m.powerBonusVsRace?.[race] ?? 0), 0);
+          const classBonus = playerClasses(combatPlayer).reduce((s, cls) => s + (m.powerBonusVsClass?.[cls] ?? 0), 0);
+          return sum + raceBonus + classBonus;
+        }, 0);
+        const effectiveMonster = additionalMonsterRaceClassBonus > 0
+          ? { ...monster, power: (monster.power ?? 0) + additionalMonsterRaceClassBonus }
+          : monster;
 
         const { winner, playerGains, playerLoses, newTreasureDeck } =
           CombatResolver.resolveCombat(
-            activePlayer,
-            monster,
+            combatPlayer,
+            effectiveMonster,
             helpers,
-            allBonusCards,
+            combatBonusCards,
             state.treasureDeck,
             state.currentMonster!.rawLevelOnly,
-            turningBonus + berserkerBonus,
+            turningBonus + berserkerBonus - (state.combatBackstabPenalty ?? 0) - genderPenalty,
             hasPriestResurrection,
+            state.currentMonster!.rawEquipOnly,
           );
 
         if (winner === 'player') {
           const extraMonsters = state.additionalMonsters ?? [];
           const allKilledMonsters = [state.currentMonster!, ...extraMonsters];
 
-          const levelsGained = allKilledMonsters.reduce((sum, m) => sum + (m.levelsOnKill ?? 1), 0);
+          const baseKillLevels = allKilledMonsters.reduce((sum, m) => sum + (m.levelsOnKill ?? 1), 0);
+          const fireKeywords = allKilledMonsters.flatMap(m => m.bonusLevelIfItemNameMatches ?? []);
+          const fireBonus = fireKeywords.length > 0 && [...allBonusCards, ...turningCards, ...berserkerCards].some(
+            c => fireKeywords.some(kw => c.name.toLowerCase().includes(kw.toLowerCase())),
+          ) ? 1 : 0;
+          // bonusLevelIfNoHelpersNoBonuses: +1 level if killed solo with no bonus cards
+          const soloNoBonusBonus = allKilledMonsters.some(m => m.bonusLevelIfNoHelpersNoBonuses) &&
+            helpers.length === 0 && allBonusCards.length === 0 && turningCards.length === 0 && berserkerCards.length === 0
+            ? 1 : 0;
+          const levelsGained = baseKillLevels + fireBonus + soloNoBonusBonus;
           const baseDiscardDoor = [...state.discardDoor, ...allKilledMonsters, ...turningDoor, ...berserkerDoor];
           const baseDiscardTreasure = [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure];
           const combatCleanup = {
@@ -740,17 +996,27 @@ export const TurnManager = {
             combatMonsterBonusCards: undefined as Card[] | undefined,
             forcedHelperId: undefined as string | undefined,
             combatLevelCap: undefined as number | undefined,
+            combatBackstabPenalty: undefined as number | undefined,
+            backstabLog: undefined as { thiefId: string; victimId: string }[] | undefined,
           };
+
+          // MonsterBooster treasure modifier (positive = extra, negative = fewer, e.g. d-004 Bébé)
+          const bonusTreasureCount = monsterBonusCards.reduce(
+            (sum, c) => sum + (c.bonusTreasuresIfDefeated ?? 0), 0,
+          );
 
           if (hasPriestResurrection) {
             // Priest resurrection: defer treasure draw, enter PriestResurrection phase
-            const totalTreasureCount = allKilledMonsters.reduce(
+            const baseTreasureCount = allKilledMonsters.reduce(
               (sum, m) => sum + CombatResolver.treasureCount(m), 0,
             );
+            const totalTreasureCount = Math.max(1, baseTreasureCount + bonusTreasureCount);
             const playerAfterLevel = withCombatPower({
               ...activePlayer,
               level: Math.min(activePlayer.level + levelsGained, state.combatLevelCap ?? 10),
               hand: handWithoutAll,
+              nextCombatPenalty: undefined,
+              nextCombatNoItemBonus: undefined,
             });
             let nextState: GameState = updatePlayer(state, playerAfterLevel);
             for (const helper of helpers) {
@@ -782,11 +1048,40 @@ export const TurnManager = {
             allGained = [...allGained, ...extraGained];
             finalTreasureDeck = newDeck;
           }
+          if (bonusTreasureCount > 0) {
+            const { cards: bonusGained, newDeck } = DeckManager.draw(
+              finalTreasureDeck, Math.min(bonusTreasureCount, finalTreasureDeck.length),
+            );
+            allGained = [...allGained, ...bonusGained];
+            finalTreasureDeck = newDeck;
+          } else if (bonusTreasureCount < 0) {
+            // remove treasures (keep minimum 1 total)
+            const toRemove = Math.min(-bonusTreasureCount, Math.max(0, allGained.length - 1));
+            if (toRemove > 0) {
+              const putBack = allGained.slice(-toRemove);
+              allGained = allGained.slice(0, allGained.length - toRemove);
+              finalTreasureDeck = [...putBack, ...finalTreasureDeck];
+            }
+          }
+          // bonusTreasureVsRace: extra treasures on kill if active player has matching race (e.g. d-073 Elves)
+          const raceExtraTreasures = allKilledMonsters.reduce((sum, m) => {
+            if (!m.bonusTreasureVsRace) return sum;
+            return sum + playerRaces(activePlayer).reduce((s, race) => s + (m.bonusTreasureVsRace![race] ?? 0), 0);
+          }, 0);
+          if (raceExtraTreasures > 0) {
+            const { cards: raceGained, newDeck } = DeckManager.draw(
+              finalTreasureDeck, Math.min(raceExtraTreasures, finalTreasureDeck.length),
+            );
+            allGained = [...allGained, ...raceGained];
+            finalTreasureDeck = newDeck;
+          }
 
           const updatedActive = withCombatPower({
             ...activePlayer,
             level: Math.min(activePlayer.level + levelsGained, state.combatLevelCap ?? 10),
             hand: [...handWithoutAll, ...allGained],
+            nextCombatPenalty: undefined,
+            nextCombatNoItemBonus: undefined,
           });
 
           let nextState: GameState = updatePlayer(state, updatedActive);
@@ -809,12 +1104,26 @@ export const TurnManager = {
         }
 
         // Monster wins — apply bad stuff
-        const levelDelta = playerLoses ?? -1;
+        let levelDelta = playerLoses ?? -1;
+        // badStuffLevelVsRace: race-specific level override
+        if (state.currentMonster!.badStuffLevelVsRace) {
+          for (const [race, delta] of Object.entries(state.currentMonster!.badStuffLevelVsRace)) {
+            if (playerRaces(activePlayer).includes(race)) { levelDelta = delta!; break; }
+          }
+        }
+        // badStuffDieRollDeathThreshold: roll a die — ≤ threshold = death, else = lose die result levels
+        if (state.currentMonster!.badStuffDieRollDeathThreshold != null) {
+          const roll = Math.ceil(Math.random() * 6);
+          levelDelta = roll <= state.currentMonster!.badStuffDieRollDeathThreshold ? -99 : -roll;
+        }
         const isDeath = levelDelta <= -99;
 
         const allDefeatedMonsters = [monster, ...(state.additionalMonsters ?? [])];
 
         const applyMonsterBadStuff = (p: Player, dead: boolean): Player => {
+          if (state.currentMonster!.badStuffSetToLevel != null) {
+            return { ...p, level: Math.max(1, state.currentMonster!.badStuffSetToLevel) };
+          }
           if (state.currentMonster!.badStuffSetToMinLevel) {
             const minLevel = Math.min(...state.players.map(pl => pl.level));
             return { ...p, level: Math.min(p.level, minLevel) };
@@ -823,7 +1132,7 @@ export const TurnManager = {
         };
 
         if (isDeath) {
-          const basePlayer = { ...activePlayer, hand: handWithoutAll };
+          const basePlayer = { ...activePlayer, hand: handWithoutAll, nextCombatPenalty: undefined, nextCombatNoItemBonus: undefined };
           const { discardDoor, discardTreasure } = disperseDeadItems(
             basePlayer,
             [...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor],
@@ -841,13 +1150,71 @@ export const TurnManager = {
             combatMonsterBonusCards: undefined,
             forcedHelperId: undefined,
             combatLevelCap: undefined,
+            // postCombatTransition already clears backstabLog/combatBackstabPenalty
           };
         }
 
         const updatedPlayer = applyMonsterBadStuff(
-          { ...activePlayer, hand: handWithoutAll },
+          { ...activePlayer, hand: handWithoutAll, nextCombatPenalty: undefined, nextCombatNoItemBonus: undefined },
           false,
         );
+
+        // badStuffHighestLevelPlayersPickItem: highest-level player(s) each take one equipped item
+        if (state.currentMonster!.badStuffHighestLevelPlayersPickItem && updatedPlayer.equipped.length > 0) {
+          const others = state.players.filter(p => p.id !== state.currentPlayerId);
+          const maxLevel = Math.max(...others.map(p => p.level));
+          const idx = state.players.findIndex(p => p.id === state.currentPlayerId);
+          const highestQueue = state.players
+            .map((_, i) => state.players[(idx + 1 + i) % state.players.length]!)
+            .filter(p => p.id !== state.currentPlayerId && p.level === maxLevel)
+            .map(p => p.id)
+            .slice(0, updatedPlayer.equipped.length);
+          if (highestQueue.length > 0) {
+            return {
+              ...updatePlayer(state, updatedPlayer),
+              phase: GamePhase.NeighborItemRemoval,
+              discardDoor: [...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor],
+              discardTreasure: [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure],
+              currentMonster: undefined,
+              additionalMonsters: undefined,
+              combatBonusCards: undefined,
+              combatMonsterBonusCards: undefined,
+              combatBackstabPenalty: undefined,
+              backstabLog: undefined,
+              neighborDiscardTarget: state.currentPlayerId,
+              neighborDiscardQueue: highestQueue,
+              neighborPickGivesToPicker: true,
+            };
+          }
+        }
+
+        // badStuffAllPlayersPickItem: ALL other players (right first) each take one equipped/hand item
+        if (state.currentMonster!.badStuffAllPlayersPickItem) {
+          const idx = state.players.findIndex(p => p.id === state.currentPlayerId);
+          const allOthers = state.players
+            .map((_, i) => state.players[(idx + 1 + i) % state.players.length]!.id)
+            .filter(id => id !== state.currentPlayerId);
+          const victimItems = updatedPlayer.equipped.length + updatedPlayer.hand.length;
+          const allPlayersQueue = allOthers.slice(0, victimItems);
+          if (allPlayersQueue.length > 0) {
+            return {
+              ...updatePlayer(state, updatedPlayer),
+              phase: GamePhase.NeighborItemRemoval,
+              discardDoor: [...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor],
+              discardTreasure: [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure],
+              currentMonster: undefined,
+              additionalMonsters: undefined,
+              combatBonusCards: undefined,
+              combatMonsterBonusCards: undefined,
+              combatBackstabPenalty: undefined,
+              backstabLog: undefined,
+              neighborDiscardTarget: state.currentPlayerId,
+              neighborDiscardQueue: allPlayersQueue,
+              neighborPickIncludesHand: true,
+              neighborPickGivesToPicker: true,
+            };
+          }
+        }
 
         // badStuffNeighborsDiscard: neighbors each pick one equipped item to discard
         if (state.currentMonster!.badStuffNeighborsDiscard && updatedPlayer.equipped.length > 0) {
@@ -866,9 +1233,262 @@ export const TurnManager = {
             additionalMonsters: undefined,
             combatBonusCards: undefined,
             combatMonsterBonusCards: undefined,
+            combatBackstabPenalty: undefined,
+            backstabLog: undefined,
             neighborDiscardTarget: state.currentPlayerId,
             neighborDiscardQueue: neighborQueue,
           };
+        }
+
+        // badStuffHandToOthers: each other player (left to right) picks one card from victim's hand; rest discarded
+        if (state.currentMonster!.badStuffHandToOthers && updatedPlayer.hand.length > 0) {
+          const idx = state.players.findIndex(p => p.id === state.currentPlayerId);
+          const n = state.players.length;
+          const allOthers = Array.from({ length: n - 1 }, (_, i) => state.players[(idx + 1 + i) % n]!.id);
+          const handToOthersQueue = allOthers.slice(0, updatedPlayer.hand.length);
+          return {
+            ...updatePlayer(state, updatedPlayer),
+            phase: GamePhase.NeighborItemRemoval,
+            discardDoor: [...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor],
+            discardTreasure: [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure],
+            currentMonster: undefined,
+            additionalMonsters: undefined,
+            combatBonusCards: undefined,
+            combatMonsterBonusCards: undefined,
+            combatBackstabPenalty: undefined,
+            backstabLog: undefined,
+            neighborDiscardTarget: state.currentPlayerId,
+            neighborDiscardQueue: handToOthersQueue,
+            neighborPickFromHandOnly: true,
+            neighborPickGivesToPicker: true,
+          };
+        }
+
+        // badStuffGoldDiscard: player must discard equipped items worth N gold; if insufficient, lose all equipped + level
+        if (state.currentMonster!.badStuffGoldDiscard != null) {
+          const required = state.currentMonster!.badStuffGoldDiscard;
+          const totalGold = updatedPlayer.equipped.reduce((sum, c) => sum + (c.goldValue ?? 0), 0);
+          const combatDiscardBase = {
+            discardDoor: [...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor],
+            discardTreasure: [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure],
+            currentMonster: undefined, additionalMonsters: undefined,
+            combatBonusCards: undefined, combatMonsterBonusCards: undefined,
+            combatBackstabPenalty: undefined, backstabLog: undefined,
+          };
+          if (totalGold >= required) {
+            return { ...updatePlayer(state, updatedPlayer), ...combatDiscardBase, phase: GamePhase.BadStuffGoldDiscard, pendingGoldDiscardRequired: required };
+          }
+          // Can't afford: lose all equipped + level penalty
+          const lostItems = [...updatedPlayer.equipped];
+          const stripped = withCombatPower({ ...updatedPlayer, equipped: [] });
+          const final = applyLevelChange(stripped, levelDelta, false);
+          return { ...updatePlayer(state, final), ...combatDiscardBase, discardTreasure: [...combatDiscardBase.discardTreasure, ...lostItems] };
+        }
+
+        // badStuffDieRollItemLoss: roll a die, player loses that many equipped OR hand cards
+        if (state.currentMonster!.badStuffDieRollItemLoss) {
+          const dieRoll = Math.ceil(Math.random() * 6);
+          return {
+            ...updatePlayer(state, updatedPlayer),
+            phase: GamePhase.BadStuffDieRollLoss,
+            pendingDieRollLossCount: dieRoll,
+            discardDoor: [...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor],
+            discardTreasure: [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure],
+            currentMonster: undefined,
+            additionalMonsters: undefined,
+            combatBonusCards: undefined,
+            combatMonsterBonusCards: undefined,
+            combatBackstabPenalty: undefined,
+            backstabLog: undefined,
+          };
+        }
+
+        // badStuffLoseFootwearOrLevel: lose equipped footwear, or N levels if none
+        if (state.currentMonster!.badStuffLoseFootwearOrLevel != null) {
+          const footwear = updatedPlayer.equipped.find(c => c.equipSlot === 'footwear');
+          if (footwear) {
+            const { kept, detachedDoor } = splitAttachments(updatedPlayer.equipped, new Set([footwear.id]));
+            const cleansed = withCombatPower({ ...updatedPlayer, equipped: kept });
+            return {
+              ...updatePlayer(state, cleansed),
+              ...postCombatTransition(state),
+              discardDoor: [...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor, ...detachedDoor],
+              discardTreasure: [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure, footwear],
+              currentMonster: undefined,
+              additionalMonsters: undefined,
+              combatBonusCards: undefined,
+              combatMonsterBonusCards: undefined,
+            };
+          }
+          // No footwear — lose N levels instead
+          const penalized = withCombatPower({ ...updatedPlayer, level: Math.max(1, updatedPlayer.level - state.currentMonster!.badStuffLoseFootwearOrLevel!) });
+          return {
+            ...updatePlayer(state, penalized),
+            ...postCombatTransition(state),
+            discardDoor: [...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor],
+            discardTreasure: [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure],
+            currentMonster: undefined,
+            additionalMonsters: undefined,
+            combatBonusCards: undefined,
+            combatMonsterBonusCards: undefined,
+          };
+        }
+
+        // badStuffLoseAllItemsAndHand: player loses all equipped items AND all hand cards
+        if (state.currentMonster!.badStuffLoseAllItemsAndHand) {
+          const allEquipped = [...updatedPlayer.equipped];
+          const allHand = [...updatedPlayer.hand];
+          const stripped = withCombatPower({ ...updatedPlayer, equipped: [], hand: [] });
+          const lostDoor = allEquipped.filter(c => c.type !== CardType.Treasure);
+          const lostTreasure = allEquipped.filter(c => c.type === CardType.Treasure);
+          const handDoor = allHand.filter(c => c.type !== CardType.Treasure);
+          const handTreasure = allHand.filter(c => c.type === CardType.Treasure);
+          return {
+            ...updatePlayer(state, stripped),
+            ...postCombatTransition(state),
+            discardDoor: [...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor, ...lostDoor, ...handDoor],
+            discardTreasure: [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure, ...lostTreasure, ...handTreasure],
+            currentMonster: undefined,
+            additionalMonsters: undefined,
+            combatBonusCards: undefined,
+            combatMonsterBonusCards: undefined,
+          };
+        }
+
+        // badStuffDiscardHand: player discards entire hand, no level loss
+        if (state.currentMonster!.badStuffDiscardHand) {
+          const lostDoor = updatedPlayer.hand.filter(c => c.type !== CardType.Treasure);
+          const lostTreasure = updatedPlayer.hand.filter(c => c.type === CardType.Treasure);
+          const stripped = withCombatPower({ ...updatedPlayer, hand: [] });
+          return {
+            ...updatePlayer(state, stripped),
+            ...postCombatTransition(state),
+            discardDoor: [...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor, ...lostDoor],
+            discardTreasure: [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure, ...lostTreasure],
+            currentMonster: undefined,
+            additionalMonsters: undefined,
+            combatBonusCards: undefined,
+            combatMonsterBonusCards: undefined,
+          };
+        }
+
+        // badStuffLoseAllClasses: player loses ALL class cards; if no class → apply levelDelta (badStuffLevel)
+        if (state.currentMonster!.badStuffLoseAllClasses) {
+          const classCards = updatedPlayer.equipped.filter(c => c.type === CardType.Class);
+          if (classCards.length > 0) {
+            const classIds = new Set(classCards.map(c => c.id));
+            const { kept, detachedDoor } = splitAttachments(updatedPlayer.equipped, classIds);
+            const { equipped: afterSM, removedSuperMunchkin } = removeSuperMunchkinIfClassless(kept);
+            const stripped = withCombatPower({ ...updatedPlayer, equipped: afterSM, superMunchkinMode: undefined });
+            return {
+              ...updatePlayer(state, stripped),
+              ...postCombatTransition(state),
+              discardDoor: [
+                ...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor,
+                ...classCards, ...detachedDoor, ...(removedSuperMunchkin ? [removedSuperMunchkin] : []),
+              ],
+              discardTreasure: [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure],
+              currentMonster: undefined,
+              additionalMonsters: undefined,
+              combatBonusCards: undefined,
+              combatMonsterBonusCards: undefined,
+            };
+          }
+          // no class → fall through to normal levelDelta path
+        }
+
+        // badStuffLoseAllRaceAndClass: player loses all Race and Class cards
+        if (state.currentMonster!.badStuffLoseAllRaceAndClass) {
+          const lostCards = updatedPlayer.equipped.filter(
+            c => c.type === CardType.Race || c.type === CardType.Class ||
+                 c.isSuperMunchkin || c.isSangMele,
+          );
+          if (lostCards.length > 0) {
+            const lostIds = new Set(lostCards.map(c => c.id));
+            const { kept } = splitAttachments(updatedPlayer.equipped, lostIds);
+            const cleansed = withCombatPower({ ...updatedPlayer, equipped: kept, superMunchkinMode: undefined, sangMeleMode: undefined });
+            const lostDoor = lostCards.filter(c => c.type !== CardType.Treasure);
+            return {
+              ...updatePlayer(state, cleansed),
+              ...postCombatTransition(state),
+              discardDoor: [...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor, ...lostDoor],
+              discardTreasure: [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure],
+              currentMonster: undefined,
+              additionalMonsters: undefined,
+              combatBonusCards: undefined,
+              combatMonsterBonusCards: undefined,
+            };
+          }
+        }
+
+        // badStuffLoseHeadgear: player loses their equipped headgear (level change from badStuffLevel)
+        if (state.currentMonster!.badStuffLoseHeadgear) {
+          const headgear = updatedPlayer.equipped.find(c => c.equipSlot === 'headgear');
+          if (headgear) {
+            const { kept, detachedDoor } = splitAttachments(updatedPlayer.equipped, new Set([headgear.id]));
+            const stripped = withCombatPower({ ...updatedPlayer, equipped: kept });
+            return {
+              ...updatePlayer(state, stripped),
+              ...postCombatTransition(state),
+              discardDoor: [...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor, headgear, ...detachedDoor],
+              discardTreasure: [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure],
+              currentMonster: undefined,
+              additionalMonsters: undefined,
+              combatBonusCards: undefined,
+              combatMonsterBonusCards: undefined,
+            };
+          }
+        }
+
+        // badStuffLoseArmorAndFootwear: player loses armor and footwear slots (if any)
+        if (state.currentMonster!.badStuffLoseArmorAndFootwear) {
+          const armorFoot = updatedPlayer.equipped.filter(
+            c => c.equipSlot === 'armor' || c.equipSlot === 'footwear',
+          );
+          if (armorFoot.length > 0) {
+            const removedIds = new Set(armorFoot.map(c => c.id));
+            const { kept, detachedDoor } = splitAttachments(updatedPlayer.equipped, removedIds);
+            const stripped = withCombatPower({ ...updatedPlayer, equipped: kept });
+            const lostTreasure = armorFoot.filter(c => c.type === CardType.Treasure);
+            const lostDoor = armorFoot.filter(c => c.type !== CardType.Treasure);
+            return {
+              ...updatePlayer(state, stripped),
+              ...postCombatTransition(state),
+              discardDoor: [...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor, ...lostDoor, ...detachedDoor],
+              discardTreasure: [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure, ...lostTreasure],
+              currentMonster: undefined,
+              additionalMonsters: undefined,
+              combatBonusCards: undefined,
+              combatMonsterBonusCards: undefined,
+            };
+          }
+        }
+
+        // badStuffLoseClassIfWizard: Wizard loses only their wizard class; non-Wizard dies (badStuffLevel: -99)
+        if (state.currentMonster!.badStuffLoseClassIfWizard) {
+          if (playerClasses(updatedPlayer).includes('wizard')) {
+            const wizardCard = updatedPlayer.equipped.find(c => c.classId === 'wizard');
+            if (wizardCard) {
+              const { kept, detachedDoor } = splitAttachments(updatedPlayer.equipped, new Set([wizardCard.id]));
+              const { equipped: afterSM, removedSuperMunchkin } = removeSuperMunchkinIfClassless(kept);
+              const stripped = withCombatPower({ ...updatedPlayer, equipped: afterSM });
+              return {
+                ...updatePlayer(state, stripped),
+                ...postCombatTransition(state),
+                discardDoor: [
+                  ...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor,
+                  wizardCard, ...detachedDoor,
+                  ...(removedSuperMunchkin ? [removedSuperMunchkin] : []),
+                ],
+                discardTreasure: [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure],
+                currentMonster: undefined,
+                additionalMonsters: undefined,
+                combatBonusCards: undefined,
+                combatMonsterBonusCards: undefined,
+              };
+            }
+          }
+          // Non-wizard: death is handled by the standard levelDelta = -99 path below
         }
 
         return {
@@ -880,6 +1500,8 @@ export const TurnManager = {
           additionalMonsters: undefined,
           combatBonusCards: undefined,
           combatMonsterBonusCards: undefined,
+          combatBackstabPenalty: undefined,
+          backstabLog: undefined,
         };
       }
 
@@ -903,7 +1525,12 @@ export const TurnManager = {
           (sum, c) => sum + (c.fleeBonus ?? 0) + (c.dieRollPenalty ?? 0),
           wizardBoost + monsterFleeBonus,
         );
-        const escaped = action.dieRoll + equippedFleeBonus >= 5;
+        const noChaseThreshold = monster.noChaseIfLevelBelow;
+        const isNoChaseException = monster.noChaseExceptionRace != null &&
+          playerRaces(activeRunner).includes(monster.noChaseExceptionRace);
+        const autoEscape = (noChaseThreshold != null && !isNoChaseException && activeRunner.level <= noChaseThreshold)
+          || (monster.autoFleeSuccess === true);
+        const escaped = autoEscape || action.dieRoll + equippedFleeBonus >= 5;
 
         const runBonusCards = state.combatBonusCards ?? [];
         const runMonsterBonusCards = state.combatMonsterBonusCards ?? [];
@@ -913,7 +1540,7 @@ export const TurnManager = {
         const baseDiscardDoor = [...(baseState.discardDoor), ...wizardDiscardedDoor];
 
         if (escaped) {
-          const monsterPenalty = monster.fleeSuccessPenalty ?? 0;
+          const monsterPenalty = fleeSuccessPenaltyFor(monster, activeRunner.level);
           const remainingMonsters = state.additionalMonsters ?? [];
           if (remainingMonsters.length > 0) {
             // Fled currentMonster successfully, must still flee each additional monster
@@ -1043,6 +1670,15 @@ export const TurnManager = {
           };
         }
 
+        // clonesCurrentMonster (d-071): clone the current monster — same power + bonuses, doubled rewards
+        if (card.clonesCurrentMonster && state.currentMonster) {
+          return {
+            ...updatePlayer(state, { ...player, hand: handWithout }),
+            additionalMonsters: [...(state.additionalMonsters ?? []), state.currentMonster],
+            discardDoor: [...state.discardDoor, card],
+          };
+        }
+
         // addMonsterFromHand: play a monster from hand into the combat, powers add together
         if (card.addMonsterFromHand && action.targetId) {
           const addedMonster = player.hand.find(c => c.id === action.targetId);
@@ -1052,6 +1688,72 @@ export const TurnManager = {
             ...updatePlayer(state, { ...player, hand: handWithoutMonster }),
             additionalMonsters: [...(state.additionalMonsters ?? []), addedMonster],
             discardDoor: [...state.discardDoor, card],
+          };
+        }
+
+        // levelUpAllByClass: all players with classId gain +1 level
+        if (card.levelUpAllByClass) {
+          let nextState = updatePlayer(state, withCombatPower({ ...player, hand: handWithout }));
+          for (const p of state.players) {
+            if (p.equipped.some(c => c.classId === card.levelUpAllByClass)) {
+              nextState = updatePlayer(nextState, withCombatPower({ ...p, level: Math.min(p.level + 1, 10) }));
+            }
+          }
+          return { ...nextState, discardDoor: [...state.discardDoor, card] };
+        }
+
+        // banishAllMonstersDrawTreasures: discard all monsters, active player draws N treasures, no level
+        if (card.banishAllMonstersDrawTreasures != null) {
+          const allMonsters = [state.currentMonster!, ...(state.additionalMonsters ?? [])];
+          const monsterBonusDiscards = state.combatMonsterBonusCards ?? [];
+          const { cards: gained, newDeck } = DeckManager.draw(
+            state.treasureDeck,
+            Math.min(card.banishAllMonstersDrawTreasures, state.treasureDeck.length),
+          );
+          const activeP = getPlayer(state, state.currentPlayerId)!;
+          const updatedActiveP = withCombatPower({ ...activeP, hand: [...activeP.hand.filter(c => c.id !== card.id), ...gained] });
+          return {
+            ...updatePlayer(state, updatedActiveP),
+            ...postCombatTransition(state),
+            treasureDeck: newDeck,
+            discardDoor: [...state.discardDoor, card, ...allMonsters, ...monsterBonusDiscards],
+            discardTreasure: [...state.discardTreasure, ...(state.combatBonusCards ?? [])],
+            currentMonster: undefined,
+            additionalMonsters: undefined,
+            combatBonusCards: undefined,
+            combatMonsterBonusCards: undefined,
+          };
+        }
+
+        // replacesMonsterInCombat: discard target monster (+its modifiers if current), replace with hand monster
+        if (card.replacesMonsterInCombat && action.targetId && action.replacementCardId) {
+          const p = getPlayer(state, _playerId)!;
+          const replacementMonster = p.hand.find(c => c.id === action.replacementCardId)!;
+          const handWithoutBoth = p.hand.filter(
+            c => c.id !== card.id && c.id !== action.replacementCardId,
+          );
+          const updatedPlayer = withCombatPower({ ...p, hand: handWithoutBoth });
+
+          if (state.currentMonster?.id === action.targetId) {
+            // Replace currentMonster — discard it and all its monster bonus cards
+            const discardedMonster = state.currentMonster;
+            const monsterBonusDiscards = state.combatMonsterBonusCards ?? [];
+            return {
+              ...updatePlayer(state, updatedPlayer),
+              currentMonster: replacementMonster,
+              combatMonsterBonusCards: undefined,
+              discardDoor: [...state.discardDoor, card, discardedMonster, ...monsterBonusDiscards],
+            };
+          }
+          // Replace an additional monster
+          const newAdditional = (state.additionalMonsters ?? []).map(
+            m => m.id === action.targetId ? replacementMonster : m,
+          );
+          const discardedAdditional = state.additionalMonsters!.find(m => m.id === action.targetId)!;
+          return {
+            ...updatePlayer(state, updatedPlayer),
+            additionalMonsters: newAdditional,
+            discardDoor: [...state.discardDoor, card, discardedAdditional],
           };
         }
 
@@ -1140,7 +1842,7 @@ export const TurnManager = {
             additionalMonsters: undefined,
             forcedHelperId: undefined,
             combatLevelCap: undefined,
-            pendingFleePenalty: (state.pendingFleePenalty ?? 0) + (state.currentMonster?.fleeSuccessPenalty ?? 0),
+            pendingFleePenalty: (state.pendingFleePenalty ?? 0) + (state.currentMonster ? fleeSuccessPenaltyFor(state.currentMonster, getPlayer(state, state.currentPlayerId)!.level) : 0),
           };
         }
 
@@ -1164,7 +1866,7 @@ export const TurnManager = {
             additionalMonsters: undefined,
             forcedHelperId: undefined,
             combatLevelCap: undefined,
-            pendingFleePenalty: (state.pendingFleePenalty ?? 0) + (monster.fleeSuccessPenalty ?? 0),
+            pendingFleePenalty: (state.pendingFleePenalty ?? 0) + fleeSuccessPenaltyFor(monster, getPlayer(state, state.currentPlayerId)!.level),
           };
         }
 
@@ -1194,7 +1896,30 @@ export const TurnManager = {
             ...updatePlayer(state, { ...player, hand: handWithout }),
             ...fleeSuccess(),
             discardTreasure: [...state.discardTreasure, card],
-            pendingFleePenalty: (state.pendingFleePenalty ?? 0) + (state.currentMonster?.fleeSuccessPenalty ?? 0),
+            pendingFleePenalty: (state.pendingFleePenalty ?? 0) + (state.currentMonster ? fleeSuccessPenaltyFor(state.currentMonster, getPlayer(state, state.currentPlayerId)!.level) : 0),
+          };
+        }
+
+        // autoFleeEarly: escape from MonsterFight or FleeReaction without rolling and without bad stuff
+        if (card.autoFleeEarly && (state.phase === GamePhase.MonsterFight || state.phase === GamePhase.FleeReaction)) {
+          const monster = state.currentMonster!;
+          const penalty = fleeSuccessPenaltyFor(monster, player.level);
+          const updatedP = penalty > 0
+            ? withCombatPower({ ...player, hand: handWithout, level: Math.max(1, player.level - penalty) })
+            : withCombatPower({ ...player, hand: handWithout });
+          return {
+            ...updatePlayer(state, updatedP),
+            ...postCombatTransition(state),
+            phase: GamePhase.Loot,
+            currentMonster: undefined,
+            additionalMonsters: undefined,
+            combatBonusCards: undefined,
+            combatMonsterBonusCards: undefined,
+            forcedHelperId: undefined,
+            combatLevelCap: undefined,
+            pendingFleePenalty: undefined,
+            discardDoor: [...state.discardDoor, monster, ...(state.additionalMonsters ?? [])],
+            discardTreasure: [...state.discardTreasure, card, ...(state.combatBonusCards ?? []), ...(state.combatMonsterBonusCards ?? [])],
           };
         }
 
@@ -1207,6 +1932,41 @@ export const TurnManager = {
             discardTreasure: [...state.discardTreasure, card],
             discardDoor: [...state.discardDoor, state.pendingCurse],
           };
+        }
+
+        // stealItemIfWinCondition (d-087): take one equipped item from another player during combat
+        if (card.stealItemIfWinCondition) {
+          const targetPlayer = getPlayer(state, action.targetPlayerId!)!;
+          const stolenItem = targetPlayer.equipped.find(c => c.id === action.targetId)!;
+          const discardId = action.replaceEquippedIds?.[0];
+
+          // Remove stolen item from target player (handle attachments)
+          const { kept: targetKept, detachedDoor: targetDetached } = splitAttachments(
+            targetPlayer.equipped, new Set([stolenItem.id]),
+          );
+          let nextState = updatePlayer(state, withCombatPower({ ...targetPlayer, equipped: targetKept }));
+          if (targetDetached.length > 0) {
+            nextState = { ...nextState, discardDoor: [...nextState.discardDoor, ...targetDetached] };
+          }
+
+          // Optionally discard own item first
+          let ownEquipped = player.equipped.filter(c => c.id !== action.cardId);
+          if (discardId) {
+            const { kept: ownKept, detachedDoor: ownDetached } = splitAttachments(ownEquipped, new Set([discardId]));
+            const discardedOwn = ownEquipped.find(c => c.id === discardId)!;
+            ownEquipped = ownKept;
+            const discardPile = discardedOwn.type === CardType.Treasure ? 'discardTreasure' : 'discardDoor';
+            nextState = { ...nextState, [discardPile]: [...nextState[discardPile], discardedOwn] };
+            if (ownDetached.length > 0) {
+              nextState = { ...nextState, discardDoor: [...nextState.discardDoor, ...ownDetached] };
+            }
+          }
+
+          // Add stolen item to own equipped
+          const newEquipped = [...ownEquipped, stolenItem];
+          const updatedSelf = withCombatPower({ ...player, hand: handWithout, equipped: newEquipped });
+          nextState = updatePlayer(nextState, updatedSelf);
+          return { ...nextState, discardDoor: [...nextState.discardDoor, card] };
         }
 
         // Steal-level one-shot: active player gains 1 level, target loses 1
@@ -1358,6 +2118,7 @@ export const TurnManager = {
           if (card.forbiddenClass != null && playerClass(player) === card.forbiddenClass) return state;
           if (card.requiredRace != null && playerRace(player) !== card.requiredRace) return state;
           if (card.requiredNoRace && playerRace(player) != null) return state;
+          if (card.requiredCurrentGender != null && player.gender !== card.requiredCurrentGender) return state;
 
           // Collect items to discard: same-slot replacement + explicit hand replacements
           const toDiscard: Card[] = [];
@@ -1424,16 +2185,32 @@ export const TurnManager = {
           };
         }
 
-        // Race card: equip, replace existing race
+        // Race card: equip; if Sang-mêlé active, add without replacing existing race
         if (card.type === CardType.Race) {
-          const existingRace = player.equipped.find(c => c.type === CardType.Race);
-          const newEquipped = [
-            ...player.equipped.filter(c => c.type !== CardType.Race),
-            card,
-          ];
+          const hasSangMele = player.equipped.some(c => c.isSangMele);
+          const currentRaces = player.equipped.filter(c => c.type === CardType.Race);
+          if (hasSangMele && currentRaces.length < 2) {
+            // Add 2nd race, keep existing
+            return {
+              ...updatePlayer(state, withCombatPower({
+                ...player, hand: handWithout, equipped: [...player.equipped, card],
+              })),
+            };
+          }
+          // Normal: replace single existing race
+          const existingRace = currentRaces[0];
+          const { equipped: afterSangMele, removedSangMele } = removeSangMeleIfRaceless(
+            player.equipped.filter(c => c.type !== CardType.Race),
+          );
           return {
-            ...updatePlayer(state, withCombatPower({ ...player, hand: handWithout, equipped: newEquipped })),
-            discardDoor: existingRace ? [...state.discardDoor, existingRace] : state.discardDoor,
+            ...updatePlayer(state, withCombatPower({
+              ...player, hand: handWithout, equipped: [...afterSangMele, card],
+            })),
+            discardDoor: [
+              ...state.discardDoor,
+              ...(existingRace ? [existingRace] : []),
+              ...(removedSangMele ? [removedSangMele] : []),
+            ],
           };
         }
 
@@ -1509,7 +2286,7 @@ export const TurnManager = {
           Math.min(fleeTreasureCount, state.treasureDeck.length),
         );
         // Apply flee-success level penalty (e.g. Mr. Nonos: -1 even on successful escape)
-        const fleePenalty = (state.pendingFleePenalty ?? 0) + (monster.fleeSuccessPenalty ?? 0);
+        const fleePenalty = (state.pendingFleePenalty ?? 0) + fleeSuccessPenaltyFor(monster, fleePlayer.level);
         const basePlayer = fleeTreasureCount > 0
           ? { ...fleePlayer, hand: [...fleePlayer.hand, ...fleeGained] }
           : fleePlayer;
@@ -1535,27 +2312,71 @@ export const TurnManager = {
       // ---------------------------------------------------------------
       case 'CHOOSE_VICTIM_ITEM': {
         const target = getPlayer(state, state.neighborDiscardTarget!)!;
-        const item = target.equipped.find(c => c.id === action.targetItemId)!;
-        const { kept: keptEquipped, detachedDoor } = splitAttachments(target.equipped, new Set([item.id]));
-        const updatedTarget = { ...target, equipped: keptEquipped };
+        const fromEquipped = target.equipped.find(c => c.id === action.targetItemId);
+        const fromHand = !fromEquipped ? target.hand.find(c => c.id === action.targetItemId) : undefined;
+        const item = (fromEquipped ?? fromHand)!;
         const remainingQueue = (state.neighborDiscardQueue ?? []).slice(1);
-        const victimHasMoreItems = updatedTarget.equipped.length > 0;
-        const queueContinues = remainingQueue.length > 0 && victimHasMoreItems;
+
+        let nextState = state;
+        let extraDiscardTreasure: Card[] = [];
+        let extraDiscardDoor: Card[] = [];
+
+        if (fromEquipped) {
+          const { kept: keptEquipped, detachedDoor } = splitAttachments(target.equipped, new Set([item.id]));
+          nextState = updatePlayer(nextState, { ...target, equipped: keptEquipped });
+          if (detachedDoor.length > 0) extraDiscardDoor = detachedDoor;
+        } else {
+          nextState = updatePlayer(nextState, { ...target, hand: target.hand.filter(c => c.id !== item.id) });
+        }
+
+        if (state.neighborPickGivesToPicker) {
+          const picker = getPlayer(nextState, _playerId)!;
+          nextState = updatePlayer(nextState, { ...picker, hand: [...picker.hand, item] });
+        } else {
+          extraDiscardTreasure = [item];
+        }
+
+        const updatedTarget = getPlayer(nextState, state.neighborDiscardTarget!)!;
+        const victimHasItems = state.neighborPickFromHandOnly
+          ? updatedTarget.hand.length > 0
+          : updatedTarget.equipped.length > 0 || (state.neighborPickIncludesHand && updatedTarget.hand.length > 0);
+        const queueContinues = remainingQueue.length > 0 && victimHasItems;
+
+        const discardTreasure = [...state.discardTreasure, ...extraDiscardTreasure];
+        const discardDoor = [...state.discardDoor, ...extraDiscardDoor];
 
         if (queueContinues) {
           return {
-            ...updatePlayer(state, updatedTarget),
-            discardTreasure: [...state.discardTreasure, item],
+            ...nextState,
+            discardTreasure,
+            discardDoor,
             neighborDiscardQueue: remainingQueue,
           };
         }
 
+        // neighborPickFromHandOnly (d-034): discard remaining victim hand cards when queue done
+        let finalDiscardTreasure = discardTreasure;
+        let finalDiscardDoor = discardDoor;
+        if (!queueContinues && state.neighborPickFromHandOnly) {
+          const finalTarget = getPlayer(nextState, state.neighborDiscardTarget!)!;
+          const remainingHand = finalTarget.hand;
+          if (remainingHand.length > 0) {
+            nextState = updatePlayer(nextState, { ...finalTarget, hand: [] });
+            finalDiscardTreasure = [...finalDiscardTreasure, ...remainingHand.filter(c => c.type === CardType.Treasure)];
+            finalDiscardDoor = [...finalDiscardDoor, ...remainingHand.filter(c => c.type !== CardType.Treasure)];
+          }
+        }
+
         return {
-          ...updatePlayer(state, updatedTarget),
+          ...nextState,
           ...postCombatTransition(state),
-          discardTreasure: [...state.discardTreasure, item],
+          discardTreasure: finalDiscardTreasure,
+          discardDoor: finalDiscardDoor,
           neighborDiscardTarget: undefined,
           neighborDiscardQueue: undefined,
+          neighborPickIncludesHand: undefined,
+          neighborPickGivesToPicker: undefined,
+          neighborPickFromHandOnly: undefined,
         };
       }
 
@@ -1566,6 +2387,88 @@ export const TurnManager = {
       }
 
       // ---------------------------------------------------------------
+      case 'SET_SANG_MELE_MODE': {
+        const p = getPlayer(state, _playerId)!;
+        return updatePlayer(state, { ...p, sangMeleMode: action.mode });
+      }
+
+      // ---------------------------------------------------------------
+      case 'MATCH_GOLD_VALUE': {
+        const p = getPlayer(state, state.pendingGoldMatchQueue![0]!)!;
+        const discardIds = new Set(action.cardIds);
+        const { kept, detachedDoor } = splitAttachments(p.equipped, discardIds);
+        const discarded = p.equipped.filter(c => discardIds.has(c.id));
+        const updatedP = withCombatPower({ ...p, equipped: kept });
+        const nextBase = {
+          ...updatePlayer(state, updatedP),
+          discardTreasure: [...state.discardTreasure, ...discarded.filter(c => c.type === CardType.Treasure)],
+          discardDoor: detachedDoor.length > 0
+            ? [...state.discardDoor, ...detachedDoor, ...discarded.filter(c => c.type !== CardType.Treasure)]
+            : [...state.discardDoor, ...discarded.filter(c => c.type !== CardType.Treasure)],
+          pendingGoldMatchQueue: undefined,
+          pendingGoldMatchTarget: undefined,
+        };
+        return processGoldMatchQueue(
+          nextBase,
+          state.pendingGoldMatchTarget!,
+          state.pendingGoldMatchQueue!.slice(1),
+        );
+      }
+
+      case 'DISCARD_ITEMS_FOR_GOLD': {
+        const p = getPlayer(state, state.currentPlayerId)!;
+        const discardIds = new Set(action.cardIds);
+        const { kept, detachedDoor } = splitAttachments(p.equipped, discardIds);
+        const discarded = p.equipped.filter(c => discardIds.has(c.id));
+        const updatedP = withCombatPower({ ...p, equipped: kept });
+        return {
+          ...updatePlayer(state, updatedP),
+          phase: GamePhase.Loot,
+          pendingGoldDiscardRequired: undefined,
+          discardTreasure: [...state.discardTreasure, ...discarded],
+          discardDoor: detachedDoor.length > 0 ? [...state.discardDoor, ...detachedDoor] : state.discardDoor,
+        };
+      }
+
+      case 'DISCARD_PRE_COMBAT_ITEM': {
+        const p = getPlayer(state, state.currentPlayerId)!;
+        const discarded = p.equipped.find(c => c.id === action.cardId)!;
+        const { kept, detachedDoor } = splitAttachments(
+          p.equipped,
+          new Set([action.cardId]),
+        );
+        const updatedP = withCombatPower({ ...p, equipped: kept });
+        return {
+          ...updatePlayer(state, updatedP),
+          phase: GamePhase.MonsterFight,
+          discardTreasure: [...state.discardTreasure, discarded],
+          discardDoor: detachedDoor.length > 0 ? [...state.discardDoor, ...detachedDoor] : state.discardDoor,
+        };
+      }
+
+      case 'PRIEST_CLAIM_TREASURE': {
+        const monster = state.currentMonster!;
+        const p = getPlayer(state, state.currentPlayerId)!;
+        const count = monster.treasuresOnKill ?? 1;
+        const { cards: claimedTreasure, newDeck } = DeckManager.draw(
+          state.treasureDeck,
+          Math.min(count, state.treasureDeck.length),
+        );
+        const updatedP = withCombatPower({ ...p, hand: [...p.hand, ...claimedTreasure] });
+        return {
+          ...updatePlayer(state, updatedP),
+          phase: GamePhase.Loot,
+          currentMonster: undefined,
+          additionalMonsters: undefined,
+          combatBonusCards: undefined,
+          combatMonsterBonusCards: undefined,
+          forcedHelperId: undefined,
+          combatLevelCap: undefined,
+          treasureDeck: newDeck,
+          discardDoor: [...state.discardDoor, monster, ...(state.additionalMonsters ?? [])],
+        };
+      }
+
       case 'WIZARD_CHARM': {
         // Discard entire hand, remove target monster, draw its treasure (no level gain)
         const p = getPlayer(state, state.currentPlayerId)!;
@@ -1687,6 +2590,28 @@ export const TurnManager = {
       }
 
       // ---------------------------------------------------------------
+      case 'THIEF_SWAP_TREASURES': {
+        const p = getPlayer(state, _playerId)!;
+        const swapCount = state.currentMonster!.thiefTreasureSwapCount!;
+        const discardSet = new Set(action.discardCardIds);
+        const discarded = [...p.equipped, ...p.hand].filter(c => discardSet.has(c.id));
+        const { cards: drawn, newDeck } = DeckManager.draw(state.treasureDeck, swapCount);
+        const newEquipped = p.equipped.filter(c => !discardSet.has(c.id));
+        const newHand = [...p.hand.filter(c => !discardSet.has(c.id)), ...drawn];
+        const updatedP = withCombatPower({ ...p, equipped: newEquipped, hand: newHand });
+        return {
+          ...updatePlayer(state, updatedP),
+          ...postCombatTransition(state),
+          treasureDeck: newDeck,
+          discardTreasure: [...state.discardTreasure, ...discarded],
+          currentMonster: undefined,
+          additionalMonsters: undefined,
+          combatBonusCards: undefined,
+          combatMonsterBonusCards: undefined,
+        };
+      }
+
+      // ---------------------------------------------------------------
       case 'AVOID_MONSTER': {
         const monster = state.currentMonster!;
         const allMonsters = [monster, ...(state.additionalMonsters ?? [])];
@@ -1701,6 +2626,86 @@ export const TurnManager = {
           forcedHelperId: undefined,
           combatLevelCap: undefined,
         };
+      }
+
+      case 'BRIBE_MONSTER': {
+        const briberMonster = state.currentMonster!;
+        const allBribeMonsters = [briberMonster, ...(state.additionalMonsters ?? [])];
+        const briberPlayer = getPlayer(state, _playerId)!;
+        const briberItem = briberPlayer.equipped.find(c => c.id === action.discardItemId)!;
+        const { kept, detachedDoor } = splitAttachments(briberPlayer.equipped, new Set([briberItem.id]));
+        const updatedBriber = withCombatPower({ ...briberPlayer, equipped: kept });
+        const lostTreasure = briberItem.type === CardType.Treasure ? [briberItem] : [];
+        const lostDoor = briberItem.type !== CardType.Treasure ? [briberItem] : [];
+        return {
+          ...updatePlayer(state, updatedBriber),
+          ...postCombatTransition(state),
+          discardDoor: [...state.discardDoor, ...allBribeMonsters, ...lostDoor, ...detachedDoor],
+          discardTreasure: [...state.discardTreasure, ...lostTreasure],
+          currentMonster: undefined,
+          additionalMonsters: undefined,
+          combatBonusCards: undefined,
+          combatMonsterBonusCards: undefined,
+          forcedHelperId: undefined,
+          combatLevelCap: undefined,
+        };
+      }
+
+      // ---------------------------------------------------------------
+      case 'THIEF_BACKSTAB': {
+        const thief = getPlayer(state, _playerId)!;
+        const discarded = thief.hand.find(c => c.id === action.discardCardId)!;
+        const discardDoor = discarded.type !== CardType.Treasure
+          ? [...state.discardDoor, discarded]
+          : state.discardDoor;
+        const discardTreasure = discarded.type === CardType.Treasure
+          ? [...state.discardTreasure, discarded]
+          : state.discardTreasure;
+        const updatedThief = withCombatPower({
+          ...thief, hand: thief.hand.filter(c => c.id !== action.discardCardId),
+        });
+        return {
+          ...updatePlayer(state, updatedThief),
+          discardDoor,
+          discardTreasure,
+          combatBackstabPenalty: (state.combatBackstabPenalty ?? 0) + 2,
+          backstabLog: [...(state.backstabLog ?? []), { thiefId: _playerId, victimId: action.targetPlayerId }],
+        };
+      }
+
+      // ---------------------------------------------------------------
+      case 'THIEF_PICKPOCKET': {
+        const thief = getPlayer(state, _playerId)!;
+        const target = getPlayer(state, action.targetPlayerId)!;
+        const discarded = thief.hand.find(c => c.id === action.discardCardId)!;
+        const discardDoor = discarded.type !== CardType.Treasure
+          ? [...state.discardDoor, discarded]
+          : state.discardDoor;
+        const discardTreasure = discarded.type === CardType.Treasure
+          ? [...state.discardTreasure, discarded]
+          : state.discardTreasure;
+        const thiefAfterDiscard = withCombatPower({
+          ...thief, hand: thief.hand.filter(c => c.id !== action.discardCardId),
+        });
+
+        if (action.dieRoll >= 4) {
+          // Success: steal the item
+          const stolenItem = target.equipped.find(c => c.id === action.targetItemId)!;
+          const { kept: targetKept } = splitAttachments(target.equipped, new Set([stolenItem.id]));
+          const updatedTarget = withCombatPower({ ...target, equipped: targetKept });
+          const updatedThief = withCombatPower({
+            ...thiefAfterDiscard, hand: [...thiefAfterDiscard.hand, stolenItem],
+          });
+          let nextState = updatePlayer(state, updatedThief);
+          nextState = updatePlayer(nextState, updatedTarget);
+          return { ...nextState, discardDoor, discardTreasure };
+        } else {
+          // Failure: thief loses 1 level
+          const updatedThief = withCombatPower({
+            ...thiefAfterDiscard, level: Math.max(1, thiefAfterDiscard.level - 1),
+          });
+          return { ...updatePlayer(state, updatedThief), discardDoor, discardTreasure };
+        }
       }
 
       // ---------------------------------------------------------------
@@ -1730,7 +2735,7 @@ export const TurnManager = {
             : state.discardDoor,
           combatBonusCards: undefined,
           combatMonsterBonusCards: undefined,
-          pendingFleePenalty: (state.pendingFleePenalty ?? 0) + (state.currentMonster?.fleeSuccessPenalty ?? 0),
+          pendingFleePenalty: (state.pendingFleePenalty ?? 0) + (state.currentMonster ? fleeSuccessPenaltyFor(state.currentMonster, p.level) : 0),
         };
       }
 
@@ -1739,14 +2744,37 @@ export const TurnManager = {
         const p = getPlayer(state, state.currentPlayerId)!;
         const item = p.equipped.find(c => c.id === action.cardId)!;
         const { kept, detachedDoor } = splitAttachments(p.equipped, new Set([item.id]));
-        return {
-          ...updatePlayer(state, withCombatPower({ ...p, equipped: kept })),
-          phase: GamePhase.Loot,
+        // if discarding a Class card, also remove Super Munchkin if now classless
+        const isClassCard = item.type === CardType.Class;
+        const { equipped: afterSM, removedSuperMunchkin } = isClassCard
+          ? removeSuperMunchkinIfClassless(kept)
+          : { equipped: kept, removedSuperMunchkin: undefined };
+        const updatedSuperMode = isClassCard && afterSM.every(c => c.type !== CardType.Class)
+          ? undefined : p.superMunchkinMode;
+        const isDoorCard = item.type !== CardType.Treasure;
+        const baseState = {
+          ...updatePlayer(state, withCombatPower({ ...p, equipped: afterSM, superMunchkinMode: updatedSuperMode })),
           pendingCurse: undefined,
           pendingCurseItemChoices: undefined,
-          discardDoor: [...state.discardDoor, ...(state.pendingCurse ? [state.pendingCurse] : []), ...detachedDoor],
-          discardTreasure: [...state.discardTreasure, item],
+          discardDoor: [
+            ...state.discardDoor,
+            ...(state.pendingCurse ? [state.pendingCurse] : []),
+            ...detachedDoor,
+            ...(isDoorCard ? [item] : []),
+            ...(removedSuperMunchkin ? [removedSuperMunchkin] : []),
+          ],
+          discardTreasure: [...state.discardTreasure, ...(isDoorCard ? [] : [item])],
         };
+        // gold-match-others: victim discarded, now process other players
+        if (state.pendingGoldMatchQueue != null) {
+          const target = item.goldValue ?? 0;
+          return processGoldMatchQueue(
+            { ...baseState, pendingGoldMatchQueue: undefined },
+            target,
+            state.pendingGoldMatchQueue,
+          );
+        }
+        return { ...baseState, phase: GamePhase.Loot };
       }
 
       // ---------------------------------------------------------------
@@ -1760,6 +2788,36 @@ export const TurnManager = {
             p.hand.find(c => c.id === action.discardedCardId)!,
           ],
           pendingDiceChooserPlayerId: undefined,
+        };
+      }
+
+      // ---------------------------------------------------------------
+      case 'RESOLVE_DIE_ROLL_LOSS': {
+        const p = getPlayer(state, _playerId)!;
+        const lostIds = new Set(action.cardIds);
+        if (action.source === 'equipped') {
+          const { kept, detachedDoor } = splitAttachments(p.equipped, lostIds);
+          const lostTreasures = p.equipped.filter(c => lostIds.has(c.id) && c.type === CardType.Treasure);
+          const lostDoors = p.equipped.filter(c => lostIds.has(c.id) && c.type !== CardType.Treasure);
+          const updatedP = withCombatPower({ ...p, equipped: kept });
+          return {
+            ...updatePlayer(state, updatedP),
+            ...postCombatTransition(state),
+            pendingDieRollLossCount: undefined,
+            discardTreasure: [...state.discardTreasure, ...lostTreasures],
+            discardDoor: [...state.discardDoor, ...lostDoors, ...detachedDoor],
+          };
+        }
+        const lostCards = p.hand.filter(c => lostIds.has(c.id));
+        const updatedP = withCombatPower({ ...p, hand: p.hand.filter(c => !lostIds.has(c.id)) });
+        const lostTreasures = lostCards.filter(c => c.type === CardType.Treasure);
+        const lostDoors = lostCards.filter(c => c.type !== CardType.Treasure);
+        return {
+          ...updatePlayer(state, updatedP),
+          ...postCombatTransition(state),
+          pendingDieRollLossCount: undefined,
+          discardTreasure: [...state.discardTreasure, ...lostTreasures],
+          discardDoor: [...state.discardDoor, ...lostDoors],
         };
       }
 
@@ -1794,12 +2852,24 @@ export const TurnManager = {
       case 'RESOLVE_FLEE': {
         const monster = state.currentMonster!;
         const activePlayer = getPlayer(state, state.currentPlayerId)!;
-        const levelDelta = CombatResolver.badStuffLevelLoss(monster);
+        let levelDelta = CombatResolver.badStuffLevelLoss(monster);
+        if (monster.badStuffLevelVsRace) {
+          for (const [race, delta] of Object.entries(monster.badStuffLevelVsRace)) {
+            if (playerRaces(activePlayer).includes(race)) { levelDelta = delta!; break; }
+          }
+        }
+        if (monster.badStuffDieRollDeathThreshold != null) {
+          const roll = Math.ceil(Math.random() * 6);
+          levelDelta = roll <= monster.badStuffDieRollDeathThreshold ? -99 : -roll;
+        }
         const isDeath = levelDelta <= -99;
 
         const allFleeMonsters = [monster, ...(state.additionalMonsters ?? [])];
 
         const applyFleeBadStuff = (p: Player, dead: boolean): Player => {
+          if (monster.badStuffSetToLevel != null) {
+            return { ...p, level: Math.max(1, monster.badStuffSetToLevel) };
+          }
           if (monster.badStuffSetToMinLevel) {
             const minLevel = Math.min(...state.players.map(pl => pl.level));
             return { ...p, level: Math.min(p.level, minLevel) };
@@ -1838,6 +2908,62 @@ export const TurnManager = {
           };
         }
 
+        // badStuffLoseAllItemsAndHand: player loses all equipped items AND all hand cards
+        if (monster.badStuffLoseAllItemsAndHand) {
+          const allEquipped = [...updatedPlayer.equipped];
+          const allHand = [...updatedPlayer.hand];
+          const stripped = withCombatPower({ ...updatedPlayer, equipped: [], hand: [] });
+          const lostDoor = allEquipped.filter(c => c.type !== CardType.Treasure);
+          const lostTreasure = allEquipped.filter(c => c.type === CardType.Treasure);
+          const handDoor = allHand.filter(c => c.type !== CardType.Treasure);
+          const handTreasure = allHand.filter(c => c.type === CardType.Treasure);
+          return {
+            ...updatePlayer(state, stripped),
+            ...postCombatTransition(state),
+            discardDoor: [...state.discardDoor, ...allFleeMonsters, ...lostDoor, ...handDoor],
+            discardTreasure: [...state.discardTreasure, ...lostTreasure, ...handTreasure],
+            currentMonster: undefined,
+            additionalMonsters: undefined,
+          };
+        }
+
+        // badStuffDiscardHand: player discards entire hand, no level loss
+        if (monster.badStuffDiscardHand) {
+          const lostDoor = updatedPlayer.hand.filter(c => c.type !== CardType.Treasure);
+          const lostTreasure = updatedPlayer.hand.filter(c => c.type === CardType.Treasure);
+          const stripped = withCombatPower({ ...updatedPlayer, hand: [] });
+          return {
+            ...updatePlayer(state, stripped),
+            ...postCombatTransition(state),
+            discardDoor: [...state.discardDoor, ...allFleeMonsters, ...lostDoor],
+            discardTreasure: [...state.discardTreasure, ...lostTreasure],
+            currentMonster: undefined,
+            additionalMonsters: undefined,
+          };
+        }
+
+        // badStuffLoseAllClasses: player loses ALL class cards; if no class → apply levelDelta (badStuffLevel)
+        if (monster.badStuffLoseAllClasses) {
+          const classCards = updatedPlayer.equipped.filter(c => c.type === CardType.Class);
+          if (classCards.length > 0) {
+            const classIds = new Set(classCards.map(c => c.id));
+            const { kept, detachedDoor } = splitAttachments(updatedPlayer.equipped, classIds);
+            const { equipped: afterSM, removedSuperMunchkin } = removeSuperMunchkinIfClassless(kept);
+            const stripped = withCombatPower({ ...updatedPlayer, equipped: afterSM, superMunchkinMode: undefined });
+            return {
+              ...updatePlayer(state, stripped),
+              ...postCombatTransition(state),
+              discardDoor: [
+                ...state.discardDoor, ...allFleeMonsters,
+                ...classCards, ...detachedDoor, ...(removedSuperMunchkin ? [removedSuperMunchkin] : []),
+              ],
+              currentMonster: undefined,
+              additionalMonsters: undefined,
+            };
+          }
+          // no class → fall through to normal levelDelta path
+        }
+
         // badStuffLoseAllBigItems: player loses all equipped big items
         if (monster.badStuffLoseAllBigItems) {
           const bigItemIds = new Set(updatedPlayer.equipped.filter(c => c.isBigItem).map(c => c.id));
@@ -1852,6 +2978,153 @@ export const TurnManager = {
               discardTreasure: [...state.discardTreasure, ...lostBigItems],
               currentMonster: undefined,
               additionalMonsters: undefined,
+            };
+          }
+        }
+
+        // badStuffLoseHeadgear: player loses their equipped headgear (level change from badStuffLevel)
+        if (monster.badStuffLoseHeadgear) {
+          const headgear = updatedPlayer.equipped.find(c => c.equipSlot === 'headgear');
+          if (headgear) {
+            const { kept, detachedDoor } = splitAttachments(updatedPlayer.equipped, new Set([headgear.id]));
+            const stripped = withCombatPower({ ...updatedPlayer, equipped: kept });
+            return {
+              ...updatePlayer(state, stripped),
+              ...postCombatTransition(state),
+              discardDoor: [...state.discardDoor, ...allFleeMonsters, headgear, ...detachedDoor],
+              currentMonster: undefined,
+              additionalMonsters: undefined,
+            };
+          }
+        }
+
+        // badStuffLoseArmorAndFootwear: player loses armor and footwear slots (if any)
+        if (monster.badStuffLoseArmorAndFootwear) {
+          const armorFoot = updatedPlayer.equipped.filter(
+            c => c.equipSlot === 'armor' || c.equipSlot === 'footwear',
+          );
+          if (armorFoot.length > 0) {
+            const removedIds = new Set(armorFoot.map(c => c.id));
+            const { kept, detachedDoor } = splitAttachments(updatedPlayer.equipped, removedIds);
+            const stripped = withCombatPower({ ...updatedPlayer, equipped: kept });
+            const lostTreasure = armorFoot.filter(c => c.type === CardType.Treasure);
+            const lostDoor = armorFoot.filter(c => c.type !== CardType.Treasure);
+            return {
+              ...updatePlayer(state, stripped),
+              ...postCombatTransition(state),
+              discardDoor: [...state.discardDoor, ...allFleeMonsters, ...lostDoor, ...detachedDoor],
+              discardTreasure: [...state.discardTreasure, ...lostTreasure],
+              currentMonster: undefined,
+              additionalMonsters: undefined,
+            };
+          }
+        }
+
+        // badStuffLoseClassIfWizard: Wizard loses only their wizard class; non-Wizard dies
+        if (monster.badStuffLoseClassIfWizard) {
+          if (playerClasses(updatedPlayer).includes('wizard')) {
+            const wizardCard = updatedPlayer.equipped.find(c => c.classId === 'wizard');
+            if (wizardCard) {
+              const { kept, detachedDoor } = splitAttachments(updatedPlayer.equipped, new Set([wizardCard.id]));
+              const { equipped: afterSM, removedSuperMunchkin } = removeSuperMunchkinIfClassless(kept);
+              const stripped = withCombatPower({ ...updatedPlayer, equipped: afterSM });
+              return {
+                ...updatePlayer(state, stripped),
+                ...postCombatTransition(state),
+                discardDoor: [
+                  ...state.discardDoor, ...allFleeMonsters, wizardCard, ...detachedDoor,
+                  ...(removedSuperMunchkin ? [removedSuperMunchkin] : []),
+                ],
+                currentMonster: undefined,
+                additionalMonsters: undefined,
+              };
+            }
+          }
+          // Non-wizard: death handled by standard levelDelta = -99
+        }
+
+        // badStuffGoldDiscard: discard items worth N gold; if insufficient, lose all equipped + level
+        if (monster.badStuffGoldDiscard != null) {
+          const required = monster.badStuffGoldDiscard;
+          const totalGold = updatedPlayer.equipped.reduce((sum, c) => sum + (c.goldValue ?? 0), 0);
+          if (totalGold >= required) {
+            return {
+              ...updatePlayer(state, updatedPlayer),
+              ...postCombatTransition(state),
+              phase: GamePhase.BadStuffGoldDiscard,
+              pendingGoldDiscardRequired: required,
+              discardDoor: [...state.discardDoor, ...allFleeMonsters],
+              currentMonster: undefined, additionalMonsters: undefined,
+            };
+          }
+          const lostItems = [...updatedPlayer.equipped];
+          const stripped = withCombatPower({ ...updatedPlayer, equipped: [] });
+          const final = applyLevelChange(stripped, levelDelta, false);
+          return {
+            ...updatePlayer(state, final),
+            ...postCombatTransition(state),
+            discardDoor: [...state.discardDoor, ...allFleeMonsters],
+            discardTreasure: [...state.discardTreasure, ...lostItems],
+            currentMonster: undefined, additionalMonsters: undefined,
+          };
+        }
+
+        // badStuffDieRollItemLoss: roll a die, player loses that many equipped OR hand cards
+        if (monster.badStuffDieRollItemLoss) {
+          const dieRoll = Math.ceil(Math.random() * 6);
+          return {
+            ...updatePlayer(state, updatedPlayer),
+            phase: GamePhase.BadStuffDieRollLoss,
+            pendingDieRollLossCount: dieRoll,
+            discardDoor: [...state.discardDoor, ...allFleeMonsters],
+            currentMonster: undefined,
+            additionalMonsters: undefined,
+          };
+        }
+
+        // badStuffHighestLevelPlayersPickItem: highest-level player(s) each take one equipped item
+        if (monster.badStuffHighestLevelPlayersPickItem && updatedPlayer.equipped.length > 0) {
+          const others = state.players.filter(p => p.id !== state.currentPlayerId);
+          const maxLevel = Math.max(...others.map(p => p.level));
+          const idx = state.players.findIndex(p => p.id === state.currentPlayerId);
+          const highestQueue = state.players
+            .map((_, i) => state.players[(idx + 1 + i) % state.players.length]!)
+            .filter(p => p.id !== state.currentPlayerId && p.level === maxLevel)
+            .map(p => p.id)
+            .slice(0, updatedPlayer.equipped.length);
+          if (highestQueue.length > 0) {
+            return {
+              ...updatePlayer(state, updatedPlayer),
+              phase: GamePhase.NeighborItemRemoval,
+              discardDoor: [...state.discardDoor, ...allFleeMonsters],
+              currentMonster: undefined,
+              additionalMonsters: undefined,
+              neighborDiscardTarget: state.currentPlayerId,
+              neighborDiscardQueue: highestQueue,
+              neighborPickGivesToPicker: true,
+            };
+          }
+        }
+
+        // badStuffAllPlayersPickItem: ALL other players (right first) each take one equipped/hand item
+        if (monster.badStuffAllPlayersPickItem) {
+          const idx = state.players.findIndex(p => p.id === state.currentPlayerId);
+          const allOthers = state.players
+            .map((_, i) => state.players[(idx + 1 + i) % state.players.length]!.id)
+            .filter(id => id !== state.currentPlayerId);
+          const victimItems = updatedPlayer.equipped.length + updatedPlayer.hand.length;
+          const allPlayersQueue = allOthers.slice(0, victimItems);
+          if (allPlayersQueue.length > 0) {
+            return {
+              ...updatePlayer(state, updatedPlayer),
+              phase: GamePhase.NeighborItemRemoval,
+              discardDoor: [...state.discardDoor, ...allFleeMonsters],
+              currentMonster: undefined,
+              additionalMonsters: undefined,
+              neighborDiscardTarget: state.currentPlayerId,
+              neighborDiscardQueue: allPlayersQueue,
+              neighborPickIncludesHand: true,
+              neighborPickGivesToPicker: true,
             };
           }
         }
@@ -1871,6 +3144,25 @@ export const TurnManager = {
             additionalMonsters: undefined,
             neighborDiscardTarget: state.currentPlayerId,
             neighborDiscardQueue: neighborQueue,
+          };
+        }
+
+        // badStuffHandToOthers: each other player picks one card from victim's hand; rest discarded
+        if (monster.badStuffHandToOthers && updatedPlayer.hand.length > 0) {
+          const idx = state.players.findIndex(p => p.id === state.currentPlayerId);
+          const n = state.players.length;
+          const allOthers = Array.from({ length: n - 1 }, (_, i) => state.players[(idx + 1 + i) % n]!.id);
+          const handToOthersQueue = allOthers.slice(0, updatedPlayer.hand.length);
+          return {
+            ...updatePlayer(state, updatedPlayer),
+            phase: GamePhase.NeighborItemRemoval,
+            discardDoor: [...state.discardDoor, ...allFleeMonsters],
+            currentMonster: undefined,
+            additionalMonsters: undefined,
+            neighborDiscardTarget: state.currentPlayerId,
+            neighborDiscardQueue: handToOthersQueue,
+            neighborPickFromHandOnly: true,
+            neighborPickGivesToPicker: true,
           };
         }
 
@@ -1920,6 +3212,211 @@ export const TurnManager = {
             ...state,
             phase: GamePhase.CurseItemChoice,
             pendingCurseItemChoices: tied.map(c => c.id),
+          };
+        }
+
+        // lose-class: 0 classes → lose 1 level; 1 class → auto-discard; 2 classes → choose
+        if (curse.curseEffect === 'lose-class') {
+          const classCards = activePlayer.equipped.filter(c => c.type === CardType.Class);
+          const baseDoor = [...state.discardDoor, curse];
+          if (classCards.length === 0) {
+            return {
+              ...updatePlayer(state, withCombatPower({ ...activePlayer, level: Math.max(1, activePlayer.level - 1) })),
+              phase: GamePhase.Loot,
+              pendingCurse: undefined,
+              discardDoor: baseDoor,
+            };
+          }
+          if (classCards.length === 1) {
+            const classCard = classCards[0]!;
+            const { kept, detachedDoor } = splitAttachments(activePlayer.equipped, new Set([classCard.id]));
+            const { equipped: afterSM, removedSuperMunchkin } = removeSuperMunchkinIfClassless(kept);
+            return {
+              ...updatePlayer(state, withCombatPower({ ...activePlayer, equipped: afterSM, superMunchkinMode: undefined })),
+              phase: GamePhase.Loot,
+              pendingCurse: undefined,
+              discardDoor: [...baseDoor, classCard, ...detachedDoor, ...(removedSuperMunchkin ? [removedSuperMunchkin] : [])],
+            };
+          }
+          // 2 classes (Super Munchkin): player chooses which one via CurseItemChoice
+          return {
+            ...state,
+            phase: GamePhase.CurseItemChoice,
+            pendingCurse: undefined,
+            pendingCurseItemChoices: classCards.map(c => c.id),
+            discardDoor: baseDoor,
+          };
+        }
+
+        // gold-match-others: victim chooses 1 item; others must match its gold value or lose all + 1 level
+        if (curse.curseEffect === 'gold-match-others') {
+          if (activePlayer.equipped.length === 0) {
+            return { ...state, phase: GamePhase.Loot, pendingCurse: undefined, discardDoor: [...state.discardDoor, curse] };
+          }
+          const idx = state.players.findIndex(p => p.id === state.currentPlayerId);
+          const n = state.players.length;
+          const otherIds = Array.from({ length: n - 1 }, (_, i) => state.players[(idx + 1 + i) % n]!.id);
+          return {
+            ...state,
+            phase: GamePhase.CurseItemChoice,
+            pendingCurse: undefined,
+            pendingCurseItemChoices: activePlayer.equipped.map(c => c.id),
+            pendingGoldMatchQueue: otherIds,
+            discardDoor: [...state.discardDoor, curse],
+          };
+        }
+
+        // lose-small-item / lose-big-item: player chooses which item to discard (CurseItemChoice if multiple)
+        if (curse.curseEffect === 'lose-small-item' || curse.curseEffect === 'lose-big-item') {
+          const candidates = activePlayer.equipped.filter(c =>
+            c.type === CardType.Treasure &&
+            (curse.curseEffect === 'lose-big-item' ? c.isBigItem : !c.isBigItem),
+          );
+          if (candidates.length === 0) {
+            return { ...state, phase: GamePhase.Loot, pendingCurse: undefined, discardDoor: [...state.discardDoor, curse] };
+          }
+          if (candidates.length === 1) {
+            const item = candidates[0]!;
+            const { kept, detachedDoor } = splitAttachments(activePlayer.equipped, new Set([item.id]));
+            return {
+              ...updatePlayer(state, withCombatPower({ ...activePlayer, equipped: kept })),
+              phase: GamePhase.Loot,
+              pendingCurse: undefined,
+              discardDoor: [...state.discardDoor, curse, ...detachedDoor],
+              discardTreasure: [...state.discardTreasure, item],
+            };
+          }
+          return { ...state, phase: GamePhase.CurseItemChoice, pendingCurseItemChoices: candidates.map(c => c.id) };
+        }
+
+        // swap-race-from-discard: if player has a race, replace with last Race in discardDoor (or just lose race)
+        if (curse.curseEffect === 'swap-race-from-discard') {
+          const currentRaces = activePlayer.equipped.filter(c => c.type === CardType.Race);
+          if (currentRaces.length === 0) {
+            // No race — no effect
+            return {
+              ...state,
+              phase: GamePhase.Loot,
+              pendingCurse: undefined,
+              discardDoor: [...state.discardDoor, curse],
+            };
+          }
+          // Remove current race(s) from equipped
+          const raceIds = new Set(currentRaces.map(c => c.id));
+          const equippedWithoutRace = activePlayer.equipped.filter(c => !raceIds.has(c.id));
+          // Search discardDoor from last to first for a Race card
+          const raceIdx = [...state.discardDoor].reverse().findIndex(c => c.type === CardType.Race);
+          if (raceIdx === -1) {
+            // No Race in discard — just lose race
+            const { equipped: afterSM, removedSangMele } = removeSangMeleIfRaceless(equippedWithoutRace);
+            return {
+              ...updatePlayer(state, withCombatPower({ ...activePlayer, equipped: afterSM })),
+              phase: GamePhase.Loot,
+              pendingCurse: undefined,
+              discardDoor: [...state.discardDoor, curse, ...currentRaces, ...(removedSangMele ? [removedSangMele] : [])],
+            };
+          }
+          // Found: the actual index in original array
+          const actualIdx = state.discardDoor.length - 1 - raceIdx;
+          const newRace = state.discardDoor[actualIdx]!;
+          const newDiscardDoor = [
+            ...state.discardDoor.slice(0, actualIdx),
+            ...state.discardDoor.slice(actualIdx + 1),
+            curse,
+            ...currentRaces,
+          ];
+          return {
+            ...updatePlayer(state, withCombatPower({
+              ...activePlayer,
+              equipped: [...equippedWithoutRace, newRace],
+            })),
+            phase: GamePhase.Loot,
+            pendingCurse: undefined,
+            discardDoor: newDiscardDoor,
+          };
+        }
+
+        // swap-class-from-discard: if player has a class, replace with last Class in discardDoor (or just lose class)
+        if (curse.curseEffect === 'swap-class-from-discard') {
+          const currentClasses = activePlayer.equipped.filter(c => c.type === CardType.Class);
+          if (currentClasses.length === 0) {
+            // No class — no effect
+            return {
+              ...state,
+              phase: GamePhase.Loot,
+              pendingCurse: undefined,
+              discardDoor: [...state.discardDoor, curse],
+            };
+          }
+          // Remove all current class cards from equipped + SM cleanup
+          const classIds = new Set(currentClasses.map(c => c.id));
+          const equippedWithoutClass = activePlayer.equipped.filter(c => !classIds.has(c.id));
+          const { equipped: afterSM, removedSuperMunchkin } = removeSuperMunchkinIfClassless(equippedWithoutClass);
+          // Search discardDoor from last to first for a Class card
+          const classIdx = [...state.discardDoor].reverse().findIndex(c => c.type === CardType.Class);
+          if (classIdx === -1) {
+            // No Class in discard — just lose class
+            return {
+              ...updatePlayer(state, withCombatPower({ ...activePlayer, equipped: afterSM })),
+              phase: GamePhase.Loot,
+              pendingCurse: undefined,
+              discardDoor: [
+                ...state.discardDoor, curse, ...currentClasses,
+                ...(removedSuperMunchkin ? [removedSuperMunchkin] : []),
+              ],
+            };
+          }
+          // Found: pull it out of discard and equip it (replaces all previous classes)
+          const actualIdx = state.discardDoor.length - 1 - classIdx;
+          const newClass = state.discardDoor[actualIdx]!;
+          const newDiscardDoor = [
+            ...state.discardDoor.slice(0, actualIdx),
+            ...state.discardDoor.slice(actualIdx + 1),
+            curse,
+            ...currentClasses,
+            ...(removedSuperMunchkin ? [removedSuperMunchkin] : []),
+          ];
+          // Re-equip with SM stripped (they now have exactly 1 class — no need for SM)
+          return {
+            ...updatePlayer(state, withCombatPower({
+              ...activePlayer,
+              equipped: [...afterSM, newClass],
+            })),
+            phase: GamePhase.Loot,
+            pendingCurse: undefined,
+            discardDoor: newDiscardDoor,
+          };
+        }
+
+        // lose-two-cards: left neighbor takes 1 random hand card, then right neighbor takes 1 random hand card
+        if (curse.curseEffect === 'lose-two-cards') {
+          const idx = state.players.findIndex(p => p.id === state.currentPlayerId);
+          const n = state.players.length;
+          const leftId = state.players[(idx - 1 + n) % n]!.id;
+          const rightId = state.players[(idx + 1) % n]!.id;
+
+          let remaining = [...activePlayer.hand];
+          let nextState = state;
+
+          if (remaining.length > 0) {
+            const i1 = Math.floor(Math.random() * remaining.length);
+            const [stolen1] = remaining.splice(i1, 1);
+            const left = getPlayer(nextState, leftId)!;
+            nextState = updatePlayer(nextState, { ...left, hand: [...left.hand, stolen1!] });
+          }
+
+          if (remaining.length > 0) {
+            const i2 = Math.floor(Math.random() * remaining.length);
+            const [stolen2] = remaining.splice(i2, 1);
+            const right = getPlayer(nextState, rightId)!;
+            nextState = updatePlayer(nextState, { ...right, hand: [...right.hand, stolen2!] });
+          }
+
+          return {
+            ...updatePlayer(nextState, { ...activePlayer, hand: remaining }),
+            phase: GamePhase.Loot,
+            pendingCurse: undefined,
+            discardDoor: [...state.discardDoor, curse],
           };
         }
 

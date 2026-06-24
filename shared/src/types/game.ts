@@ -14,8 +14,16 @@ export enum GamePhase {
   NeighborItemRemoval = 'NeighborItemRemoval',
   /** Player must choose which tied item to discard (curse with multiple items at max bonus) */
   CurseItemChoice = 'CurseItemChoice',
+  /** Active player must discard one equipped item before the monster fight begins */
+  PreCombatDiscard = 'PreCombatDiscard',
+  /** Active player must discard equipped items totaling pendingGoldDiscardRequired gold pieces */
+  BadStuffGoldDiscard = 'BadStuffGoldDiscard',
+  /** Current player in pendingGoldMatchQueue must discard item(s) totaling ≥ pendingGoldMatchTarget */
+  CurseGoldMatch = 'CurseGoldMatch',
   /** Player must choose their bad stuff: lose levels OR discard entire hand */
   BadStuffChoice = 'BadStuffChoice',
+  /** Player must choose to lose N items from equipped OR N cards from hand (die roll result) */
+  BadStuffDieRollLoss = 'BadStuffDieRollLoss',
   /** Priest player chooses to draw face-up cards from discard (paying hand cards) or draw from deck */
   PriestResurrection = 'PriestResurrection',
   Loot = 'Loot',
@@ -51,14 +59,32 @@ export interface GameState {
   pendingDiceChooserPlayerId?: string;
   /** Accumulated level loss to apply when flee is finalised (from fleeSuccessPenalty monsters) */
   pendingFleePenalty?: number;
-  /** During NeighborItemRemoval: the victim whose equipped items are being discarded */
+  /** During NeighborItemRemoval: the victim whose items are being taken/discarded */
   neighborDiscardTarget?: string;
-  /** During NeighborItemRemoval: player IDs (in order) who still need to choose an item to discard */
+  /** During NeighborItemRemoval: player IDs (in order) who still need to choose an item */
   neighborDiscardQueue?: string[];
+  /** During NeighborItemRemoval: if true, pickers may also pick from the victim's hand (not just equipped) */
+  neighborPickIncludesHand?: boolean;
+  /** During NeighborItemRemoval: if true, the picked item goes to the picker's hand instead of the discard pile */
+  neighborPickGivesToPicker?: boolean;
+  /** During NeighborItemRemoval: if true, pickers may only pick from victim's hand (not equipped) */
+  neighborPickFromHandOnly?: boolean;
   /** During CurseItemChoice: IDs of tied items the active player must choose from to discard */
   pendingCurseItemChoices?: string[];
   /** During BadStuffChoice: level loss to apply if the player chooses levels over hand */
   pendingBadStuffLevels?: number;
+  /** During BadStuffDieRollLoss: number of items/cards the player must discard */
+  pendingDieRollLossCount?: number;
+  /** During BadStuffGoldDiscard: total gold value the player must cover by discarding equipped items */
+  pendingGoldDiscardRequired?: number;
+  /** During CurseGoldMatch: gold value each queued player must match by discarding items */
+  pendingGoldMatchTarget?: number;
+  /** During CurseGoldMatch: player IDs still to resolve (first = current active) */
+  pendingGoldMatchQueue?: string[];
   /** During PriestResurrection: number of treasure cards the priest may draw from discard (instead of deck) */
   pendingTreasureCount?: number;
+  /** Total backstab penalty accumulated this combat (positive number, subtracted from player team total) */
+  combatBackstabPenalty?: number;
+  /** Log of backstabs this combat: [thiefId, victimId] pairs (for once-per-victim-per-thief enforcement) */
+  backstabLog?: { thiefId: string; victimId: string }[];
 }

@@ -1,12 +1,14 @@
 import type { Card, Player } from '@munchkin/shared';
-import { playerRace, playerClass, playerClasses } from '@munchkin/shared';
+import { playerRace, playerRaces, playerClass, playerClasses } from '@munchkin/shared';
 import type { CombatResult, LevelChange } from './types.js';
 import { DeckManager } from './DeckManager.js';
 
 function equipmentBonus(player: Player): number {
   const race = playerRace(player);
+  const races = playerRaces(player);
   const classes = playerClasses(player);
   const isSuperMunchkin = player.equipped.some(c => c.isSuperMunchkin);
+  const isSangMeleSuperMode = player.sangMeleMode === 'super' && player.equipped.some(c => c.isSangMele);
   const bypassedIds = new Set(
     player.equipped
       .filter(c => c.bypassesItemRestrictions && c.attachedToItemId != null)
@@ -18,11 +20,12 @@ function equipmentBonus(player: Player): number {
     if (!bypassed) {
       if (c.requiredClass != null && !classes.includes(c.requiredClass)) return sum;
       if (!isSuperMunchkin && c.forbiddenClass != null && classes.includes(c.forbiddenClass)) return sum;
-      if (c.requiredRace != null && c.requiredRace !== race) return sum;
+      if (c.requiredRace != null && !races.includes(c.requiredRace)) return sum;
+      if (!isSangMeleSuperMode && c.forbiddenRace != null && races.includes(c.forbiddenRace)) return sum;
       if (c.requiredNoRace && race !== 'human') return sum;
     }
     const base = c.power ?? 0;
-    const raceBonus = c.racePowerBonus?.[race] ?? 0;
+    const raceBonus = races.reduce((rb, r) => rb + (c.racePowerBonus?.[r] ?? 0), 0);
     return sum + base + raceBonus;
   }, 0);
 }
@@ -80,10 +83,13 @@ export const CombatResolver = {
     rawLevelOnly = false,
     extraPlayerPower = 0,
     skipTreasureDraw = false,
+    rawEquipOnly = false,
   ): CombatResult & { newTreasureDeck: Card[] } {
     const baseStrength = rawLevelOnly
       ? player.level
-      : player.level + equipmentBonus(player) + classBonus(player);
+      : rawEquipOnly
+        ? equipmentBonus(player) + classBonus(player)
+        : player.level + equipmentBonus(player) + classBonus(player);
     const hasDoubler = !rawLevelOnly && bonusItems.some(c => c.doublesPlayerStrength);
     const multiplier = hasDoubler && helpers.length === 0 ? 2 : 1;
     const regularBonusItems = rawLevelOnly ? [] : bonusItems.filter(c => !c.doublesPlayerStrength);
@@ -94,8 +100,11 @@ export const CombatResolver = {
       allyRaceBonus(regularBonusItems, player, helpers) +
       extraPlayerPower;
 
-    const activeRace = playerRace(player);
-    const monsterRaceBonus = monster.powerBonusVsRace?.[activeRace] ?? 0;
+    // Sang-mêlé in super mode: monster gets no race-based bonus
+    const isSangMeleSuperMode = player.sangMeleMode === 'super' &&
+      player.equipped.some(c => c.isSangMele);
+    const monsterRaceBonus = isSangMeleSuperMode ? 0 :
+      playerRaces(player).reduce((sum, race) => sum + (monster.powerBonusVsRace?.[race] ?? 0), 0);
     // Super Munchkin in super mode: monster gets no class-based bonus
     const isSuperMode = player.superMunchkinMode === 'super' &&
       player.equipped.some(c => c.isSuperMunchkin);

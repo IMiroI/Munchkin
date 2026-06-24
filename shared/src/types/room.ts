@@ -5,6 +5,7 @@ export interface RoomPlayer {
   id: string;
   name: string;
   isHost: boolean;
+  gender?: 'male' | 'female';
 }
 
 export type RoomStatus = 'waiting' | 'playing';

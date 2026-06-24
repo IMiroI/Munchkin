@@ -10,6 +10,7 @@ const makePlayer = (overrides: Partial<Player> = {}): Player => ({
   combatPower: 3,
   hand: [],
   equipped: [],
+  gender: 'male',
   ...overrides,
 });
 

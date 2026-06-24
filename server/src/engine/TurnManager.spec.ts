@@ -21,7 +21,7 @@ const EQUIPMENT: Card    = { id: 't-016', name: 'Bottes',   type: CardType.Treas
 const LEVEL_UP: Card     = { id: 't-051', name: 'Pillaaaaaaage !', type: CardType.Treasure, levelUp: 1 };
 
 function makePlayer(id: string, overrides: Partial<Player> = {}): Player {
-  return { id, name: id, level: 1, combatPower: 1, hand: [], equipped: [], ...overrides };
+  return { id, name: id, level: 1, combatPower: 1, hand: [], equipped: [], gender: 'male', ...overrides };
 }
 
 function makeState(overrides: Partial<GameState> = {}): GameState {
