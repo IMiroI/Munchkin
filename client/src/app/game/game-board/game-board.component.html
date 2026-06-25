@@ -182,37 +182,67 @@
 
       <!-- ── Charity ── -->
       @case ('Charity') {
-        <div class="flex flex-col items-center gap-6 max-w-xs text-center">
+        <div class="flex flex-col items-center gap-5 max-w-xs text-center">
           @if (isMyTurn()) {
-            <div>
-              <div class="text-4xl mb-4 opacity-50 select-none">🙏</div>
-              <p class="font-heading font-bold text-gold-200 text-sm mb-2">Phase de Charité</p>
-              @if (mustDonate()) {
-                <div class="mkn-panel px-4 py-3 mb-1">
-                  <p class="text-xs text-blood-400 leading-relaxed">
-                    <span class="font-bold">{{ myHand().length }} cartes en main.</span>
-                    Donnez l'excédent au joueur de plus bas niveau avant de continuer.
-                  </p>
-                </div>
-              } @else {
-                <p class="text-xs text-dungeon-400 leading-relaxed">
-                  <span class="font-semibold text-dungeon-200">{{ myHand().length }}/5 cartes.</span>
-                  Vous pouvez terminer votre tour.
+            <div class="text-3xl opacity-50 select-none">🙏</div>
+            <p class="font-heading font-bold text-gold-200 text-sm">Phase de Charité</p>
+
+            @if (mustDonate()) {
+              <div class="mkn-panel px-4 py-3 w-full">
+                <p class="text-xs text-blood-300 font-bold mb-1">
+                  {{ myHand().length }} cartes en main — maximum 5
                 </p>
-              }
-            </div>
+
+                @if (charityMustDiscard()) {
+                  <!-- Active player is lowest/tied → discard -->
+                  <p class="text-xs text-dungeon-400">
+                    Vous êtes au niveau le plus bas. Cliquez sur une carte pour la <span class="text-blood-400 font-semibold">défausser</span>.
+                  </p>
+                } @else if (charityTargets().length === 1) {
+                  <!-- Single target → auto-donate -->
+                  <p class="text-xs text-dungeon-400">
+                    Cliquez sur une carte pour la donner à
+                    <span class="text-gold-400 font-semibold">{{ charityTargets()[0]!.name }}</span>
+                    (niv. {{ charityTargets()[0]!.level }}).
+                  </p>
+                } @else {
+                  <!-- Multiple tied targets → pick one first -->
+                  <p class="text-xs text-dungeon-400 mb-2">
+                    Plusieurs joueurs à égalité au niveau le plus bas. Choisissez à qui donner :
+                  </p>
+                  <div class="flex flex-col gap-1.5">
+                    @for (t of charityTargets(); track t.id) {
+                      <button (click)="selectCharityTarget(t.id)"
+                        class="py-1.5 px-3 rounded-lg text-xs font-heading font-semibold transition-all
+                               cursor-pointer active:scale-95"
+                        [class]="selectedCharityTargetId() === t.id
+                          ? 'bg-gold-800/60 border border-gold-600/60 text-gold-200'
+                          : 'bg-dungeon-800/60 border border-dungeon-600/40 text-dungeon-300 hover:bg-dungeon-700/60'">
+                        {{ t.name }} (niv. {{ t.level }})
+                        @if (selectedCharityTargetId() === t.id) { ✓ }
+                      </button>
+                    }
+                  </div>
+                  @if (selectedCharityTargetId()) {
+                    <p class="text-xs text-gold-700 mt-2">Cliquez maintenant sur une carte à donner.</p>
+                  }
+                }
+              </div>
+            } @else {
+              <p class="text-xs text-dungeon-400">
+                <span class="font-semibold text-dungeon-200">{{ myHand().length }}/5 cartes.</span>
+                Vous pouvez jouer des cartes ou terminer votre tour.
+              </p>
+            }
+
             <button (click)="endTurn()"
               [disabled]="mustDonate()"
               class="mkn-btn-primary max-w-[200px] py-3 text-sm disabled:opacity-40 disabled:cursor-not-allowed">
               ✅ Fin de Tour
             </button>
           } @else {
-            <div>
-              <div class="text-4xl mb-4 opacity-30 select-none">🙏</div>
-              <p class="font-heading text-sm text-dungeon-500">
-                Le joueur actif distribue ses cartes…
-              </p>
-            </div>
+            <div class="text-3xl mb-2 opacity-30 select-none">🙏</div>
+            <p class="font-heading text-sm text-dungeon-500">Le joueur actif distribue ses cartes…</p>
           }
         </div>
       }
@@ -225,6 +255,94 @@
             <span class="text-2xl animate-spin select-none" style="animation-duration: 3s">⌛</span>
           </div>
           <p class="font-heading text-sm text-dungeon-500 animate-pulse">Changement de joueur…</p>
+        </div>
+      }
+
+      <!-- ── CurseReaction: pending curse ── -->
+      @case ('CurseReaction') {
+        <div class="flex flex-col items-center gap-5 max-w-xs text-center">
+          <div class="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center
+                      bg-blood-950/60 border border-blood-800/40
+                      shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
+            <span class="text-3xl opacity-70 select-none">🪄</span>
+          </div>
+          @if (pendingCurse(); as curse) {
+            <div class="mkn-panel px-4 py-3 w-full">
+              <p class="font-heading text-xs font-bold text-blood-300 mb-1">{{ curse.name }}</p>
+              <p class="text-xs text-dungeon-400 leading-relaxed">{{ curse.effect }}</p>
+            </div>
+          }
+          @if (isMyTurn()) {
+            <button (click)="resolveCurse()" class="mkn-btn-primary max-w-[220px] py-3 text-sm">
+              ☠ Subir la malédiction
+            </button>
+          } @else {
+            <p class="text-xs font-heading text-dungeon-500">Le joueur actif subit une malédiction…</p>
+          }
+        </div>
+      }
+
+      <!-- ── PreCombatDiscard: must discard one item before fighting ── -->
+      @case ('PreCombatDiscard') {
+        <div class="flex flex-col items-center gap-5 max-w-xs text-center">
+          <div class="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center
+                      bg-dungeon-800/50 border border-dungeon-600/35
+                      shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
+            <span class="text-3xl opacity-60 select-none">🗑</span>
+          </div>
+          @if (monster(); as m) {
+            <p class="font-heading text-xs font-bold text-blood-300">{{ m.name }} exige un sacrifice !</p>
+          }
+          <p class="text-xs text-dungeon-400 leading-relaxed mb-1">
+            Défaussez un objet équipé avant de commencer le combat.
+          </p>
+          @if (isMyTurn()) {
+            <div class="flex flex-col gap-2 w-full">
+              @for (item of myEquipped(); track item.id) {
+                <button (click)="discardPreCombatItem(item.id)"
+                  class="w-full py-2 px-3 rounded-xl text-xs font-heading font-semibold text-left
+                         bg-dungeon-800/60 border border-dungeon-600/40 text-dungeon-300
+                         transition-all hover:bg-blood-900/50 hover:border-blood-700/50 hover:text-blood-200
+                         active:scale-95 cursor-pointer">
+                  🗑 {{ item.name }}
+                </button>
+              }
+            </div>
+          } @else {
+            <p class="text-xs font-heading text-dungeon-500">Le joueur actif choisit un objet à défausser…</p>
+          }
+        </div>
+      }
+
+      <!-- ── BodyPillage: pick items from a dead player ── -->
+      @case ('BodyPillage') {
+        <div class="flex flex-col items-center gap-5 max-w-xs text-center">
+          <div class="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center
+                      bg-dungeon-800/50 border border-dungeon-600/35
+                      shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
+            <span class="text-3xl opacity-60 select-none">💀</span>
+          </div>
+          <p class="font-heading text-sm font-bold text-blood-300">Pillage du cadavre</p>
+          @if (isMyBodyPillageTurn()) {
+            <p class="text-xs text-dungeon-400 leading-relaxed">
+              C'est votre tour de piller ! Choisissez un objet :
+            </p>
+            <div class="flex flex-col gap-2 w-full">
+              @for (item of bodyPillageItems(); track item.id) {
+                <button (click)="pickBodyLoot(item.id)"
+                  class="w-full py-2 px-3 rounded-xl text-xs font-heading font-semibold text-left
+                         bg-dungeon-800/60 border border-dungeon-600/40 text-dungeon-300
+                         transition-all hover:bg-gold-900/50 hover:border-gold-700/50 hover:text-gold-200
+                         active:scale-95 cursor-pointer">
+                  💰 {{ item.name }}
+                </button>
+              }
+            </div>
+          } @else {
+            <p class="text-xs font-heading text-dungeon-500">
+              En attente du pillage…
+            </p>
+          }
         </div>
       }
 

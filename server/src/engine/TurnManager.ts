@@ -26,31 +26,12 @@ function withCombatPower(player: Player): Player {
 
 function applyLevelChange(player: Player, delta: LevelChange, isDeath: boolean): Player {
   if (isDeath) {
-    return withCombatPower({ ...player, equipped: [], hand: [] });
+    const keptEquipped = player.equipped.filter(
+      c => c.type === CardType.Class || c.type === CardType.Race || c.isSuperMunchkin === true || c.isSangMele === true,
+    );
+    return withCombatPower({ ...player, equipped: keptEquipped, hand: [] });
   }
   return withCombatPower({ ...player, level: Math.max(1, player.level + delta) });
-}
-
-function disperseDeadItems(
-  player: Player,
-  discardDoor: Card[],
-  discardTreasure: Card[],
-): { discardDoor: Card[]; discardTreasure: Card[] } {
-  const all = [...player.equipped, ...player.hand];
-  const toDoor = all.filter(
-    c =>
-      c.type === CardType.Class ||
-      c.type === CardType.Race ||
-      c.type === CardType.DoorCurse ||
-      c.type === CardType.Monster ||
-      c.type === CardType.MonsterBooster ||
-      c.type === CardType.Special,
-  );
-  const toTreasure = all.filter(c => c.type === CardType.Treasure);
-  return {
-    discardDoor: [...discardDoor, ...toDoor],
-    discardTreasure: [...discardTreasure, ...toTreasure],
-  };
 }
 
 /**
@@ -179,6 +160,156 @@ function drawFromDoor(
   }
   const { cards, newDeck } = DeckManager.draw(d, n);
   return { cards, deck: newDeck, discard: disc };
+}
+
+function drawFromTreasure(
+  deck: GameState['treasureDeck'],
+  discard: GameState['discardTreasure'],
+  n: number,
+): { cards: ReturnType<typeof DeckManager.draw>['cards']; deck: typeof deck; discard: typeof discard } {
+  let d = deck;
+  let disc = discard;
+  if (d.length < n && disc.length > 0) {
+    d = [...d, ...DeckManager.reshuffle(disc)];
+    disc = [];
+  }
+  const { cards, newDeck } = DeckManager.draw(d, Math.min(n, d.length));
+  return { cards, deck: newDeck, discard: disc };
+}
+
+/**
+ * Task 6 — After a failed flee from currentMonster: apply bad-stuff extras then check for remaining monsters.
+ * Discards only the currentMonster; if additionalMonsters remain, enters ForcedFlee; else ends combat.
+ */
+function continueFleeOrEnd(
+  state: GameState,
+  updatedPlayer: Player,
+  extraDiscardDoor: Card[] = [],
+  extraDiscardTreasure: Card[] = [],
+): GameState {
+  const monster = state.currentMonster!;
+  const remaining = state.additionalMonsters ?? [];
+  const newDiscardDoor = [...state.discardDoor, monster, ...extraDiscardDoor];
+  const newDiscardTreasure = [...state.discardTreasure, ...extraDiscardTreasure];
+  const base = {
+    ...updatePlayer(state, updatedPlayer),
+    discardDoor: newDiscardDoor,
+    discardTreasure: newDiscardTreasure,
+  };
+  if (remaining.length > 0) {
+    const [next, ...rest] = remaining;
+    return {
+      ...base,
+      phase: GamePhase.ForcedFlee,
+      currentMonster: next,
+      additionalMonsters: rest.length > 0 ? rest : undefined,
+    };
+  }
+  return { ...base, ...postCombatTransition(state), currentMonster: undefined, additionalMonsters: undefined };
+}
+
+/**
+ * Task 6 — After a flee sub-phase (BadStuffChoice, GoldDiscard, DieRollLoss, NeighborItemRemoval)
+ * resolves: if pendingFleeMonsters is set, continue fleeing them; otherwise end combat normally.
+ */
+function afterFleeSubphase(state: GameState): GameState {
+  const remaining = state.pendingFleeMonsters!;
+  const base = { ...state, pendingFleeMonsters: undefined as Card[] | undefined };
+  if (remaining.length > 0) {
+    const [next, ...rest] = remaining;
+    return {
+      ...base,
+      phase: GamePhase.ForcedFlee,
+      currentMonster: next,
+      additionalMonsters: rest.length > 0 ? rest : undefined,
+    };
+  }
+  return { ...base, ...postCombatTransition(base) };
+}
+
+/**
+ * Task 1 — After a player dies: collect pillage-eligible items, build picker queue, enter BodyPillage.
+ * deadPlayer must still have their full equipped/hand (before being cleared).
+ */
+function enterBodyPillage(
+  state: GameState,
+  deadPlayer: Player,
+  baseDiscardDoor: Card[],
+  baseDiscardTreasure: Card[],
+  combatCleanup: Partial<GameState> = {},
+): GameState {
+  const isKept = (c: Card) =>
+    c.type === CardType.Class ||
+    c.type === CardType.Race ||
+    c.isSuperMunchkin === true ||
+    c.isSangMele === true;
+
+  const pillagingItems = [...deadPlayer.equipped.filter(c => !isKept(c)), ...deadPlayer.hand];
+  const keptEquipped = deadPlayer.equipped.filter(isKept);
+  const clearedDead = withCombatPower({ ...deadPlayer, equipped: keptEquipped, hand: [], isDead: true });
+
+  const baseState: GameState = {
+    ...updatePlayer(state, clearedDead),
+    ...combatCleanup,
+    discardDoor: baseDiscardDoor,
+    discardTreasure: baseDiscardTreasure,
+  };
+
+  if (pillagingItems.length === 0) {
+    return { ...baseState, ...postCombatTransition(baseState) };
+  }
+
+  const deadIdx = state.players.findIndex(p => p.id === deadPlayer.id);
+  const clockwiseOthers = state.players
+    .map((_, i) => state.players[(deadIdx + 1 + i) % state.players.length]!)
+    .filter(p => p.id !== deadPlayer.id && !p.isDead);
+  // Stable sort by level descending (preserves clockwise order for ties)
+  clockwiseOthers.sort((a, b) => b.level - a.level);
+  const pickers = clockwiseOthers.slice(0, pillagingItems.length).map(p => p.id);
+
+  if (pickers.length === 0) {
+    const toDoor = pillagingItems.filter(c => c.type !== CardType.Treasure);
+    const toTreasure = pillagingItems.filter(c => c.type === CardType.Treasure);
+    return {
+      ...baseState,
+      ...postCombatTransition(baseState),
+      discardDoor: [...baseDiscardDoor, ...toDoor],
+      discardTreasure: [...baseDiscardTreasure, ...toTreasure],
+    };
+  }
+
+  return {
+    ...baseState,
+    phase: GamePhase.BodyPillage,
+    bodyPillagingItems: pillagingItems,
+    bodyPillagingQueue: pickers,
+  };
+}
+
+/**
+ * Transitions to the next player's KickDown phase.
+ * If that player died this round (isDead), deals them 4 door + 4 treasure cards and clears isDead.
+ */
+function startNextTurn(state: GameState): GameState {
+  const nextId = nextPlayerId(state);
+  const nextPlayer = state.players.find(p => p.id === nextId)!;
+  const base: GameState = { ...state, phase: GamePhase.KickDown, currentPlayerId: nextId, currentMonster: undefined };
+
+  if (!nextPlayer.isDead) return base;
+
+  const { cards: doorCards, deck: doorDeck, discard: discardDoor } = drawFromDoor(state.doorDeck, state.discardDoor, 4);
+  const { cards: treasureCards, deck: treasureDeck, discard: discardTreasure } = drawFromTreasure(state.treasureDeck, state.discardTreasure, 4);
+
+  const revivedPlayer = withCombatPower({
+    ...nextPlayer,
+    isDead: false,
+    hand: [...doorCards, ...treasureCards],
+  });
+
+  return updatePlayer(
+    { ...base, doorDeck, discardDoor, treasureDeck, discardTreasure },
+    revivedPlayer,
+  );
 }
 
 /**
@@ -484,7 +615,7 @@ export const TurnManager = {
 
       case 'CHOOSE_CURSE_ITEM':
         return (
-          isActivePlayer &&
+          (isActivePlayer || playerId === state.pendingCurseTarget) &&
           state.phase === GamePhase.CurseItemChoice &&
           (state.pendingCurseItemChoices?.includes(action.cardId) ?? false)
         );
@@ -826,11 +957,20 @@ export const TurnManager = {
         if (!player) return false;
         const hasCard = player.hand.some(c => c.id === action.cardId);
         if (!hasCard) return false;
-        const others = state.players.filter(p => p.id !== playerId);
-        if (others.length === 0) return false;
-        const minLevel = Math.min(...others.map(p => p.level));
+        // Dead players cannot receive cards
         const target = state.players.find(p => p.id === action.targetPlayerId);
-        return target != null && target.level === minLevel;
+        if (target?.isDead) return false;
+        // Self-donate = discard: allowed when active player is at or below the lowest level among living players
+        const livingOthers = state.players.filter(p => p.id !== playerId && !p.isDead);
+        if (action.targetPlayerId === playerId) {
+          if (livingOthers.length === 0) return true; // sole survivor → always discard
+          const minLiving = Math.min(...livingOthers.map(p => p.level));
+          return player.level <= minLiving;
+        }
+        // Donate to another player: target must be living and at the minimum level among living others
+        if (livingOthers.length === 0) return false;
+        const minLevel = Math.min(...livingOthers.map(p => p.level));
+        return target != null && !target.isDead && target.level === minLevel;
       }
 
       case 'END_TURN': {
@@ -839,6 +979,27 @@ export const TurnManager = {
         if (!player) return false;
         const handSizeBonus = player.equipped.reduce((sum, c) => sum + (c.raceHandSizeBonus ?? 0), 0);
         return player.hand.length <= 5 + handSizeBonus;
+      }
+
+      case 'GIVE_ITEM': {
+        const combatPhases: GamePhase[] = [
+          GamePhase.MonsterFight, GamePhase.FleeReaction, GamePhase.ForcedFlee,
+          GamePhase.FleeSuccessReaction, GamePhase.BodyPillage,
+        ];
+        if (combatPhases.includes(state.phase)) return false;
+        const giver = getPlayer(state, playerId);
+        if (!giver) return false;
+        const item = giver.equipped.find(c => c.id === action.itemId);
+        if (!item) return false;
+        if (item.type === CardType.Class || item.type === CardType.Race) return false;
+        const target = getPlayer(state, action.targetPlayerId);
+        return target != null && target.id !== playerId && !target.isDead;
+      }
+
+      case 'PICK_BODY_LOOT': {
+        if (state.phase !== GamePhase.BodyPillage) return false;
+        if (state.bodyPillagingQueue?.[0] !== playerId) return false;
+        return state.bodyPillagingItems?.some(c => c.id === action.cardId) ?? false;
       }
 
       default:
@@ -1133,25 +1294,16 @@ export const TurnManager = {
 
         if (isDeath) {
           const basePlayer = { ...activePlayer, hand: handWithoutAll, nextCombatPenalty: undefined, nextCombatNoItemBonus: undefined };
-          const { discardDoor, discardTreasure } = disperseDeadItems(
-            basePlayer,
+          // Apply level/special bad stuff ONLY to derive the new level; enterBodyPillage handles clearing equipped/hand
+          const withBadStuffLevel = applyMonsterBadStuff(basePlayer, true);
+          const preDeathPlayer = { ...basePlayer, level: withBadStuffLevel.level };
+          return enterBodyPillage(
+            state,
+            preDeathPlayer,
             [...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor],
             [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure],
+            { combatBonusCards: undefined, combatMonsterBonusCards: undefined, forcedHelperId: undefined, combatLevelCap: undefined },
           );
-          const deadPlayer = applyMonsterBadStuff(basePlayer, true);
-          return {
-            ...updatePlayer(state, deadPlayer),
-            ...postCombatTransition(state),
-            discardDoor,
-            discardTreasure,
-            currentMonster: undefined,
-            additionalMonsters: undefined,
-            combatBonusCards: undefined,
-            combatMonsterBonusCards: undefined,
-            forcedHelperId: undefined,
-            combatLevelCap: undefined,
-            // postCombatTransition already clears backstabLog/combatBackstabPenalty
-          };
         }
 
         const updatedPlayer = applyMonsterBadStuff(
@@ -2218,9 +2370,49 @@ export const TurnManager = {
         if (card.type === CardType.DoorCurse && action.targetId) {
           const target = getPlayer(state, action.targetId);
           if (!target) return state;
+          const baseState = updatePlayer(state, { ...player, hand: handWithout });
+
+          const getCandidates = (p: Player, effect: string): Player['equipped'] => {
+            if (effect === 'lose-big-item') return p.equipped.filter(c => c.type === CardType.Treasure && c.isBigItem);
+            if (effect === 'lose-small-item') return p.equipped.filter(c => c.type === CardType.Treasure && !c.isBigItem);
+            if (effect === 'lose-highest-bonus-item') {
+              const treasures = p.equipped.filter(c => c.type === CardType.Treasure && (c.power ?? 0) > 0);
+              if (treasures.length === 0) return [];
+              const max = Math.max(...treasures.map(c => c.power ?? 0));
+              return treasures.filter(c => (c.power ?? 0) === max);
+            }
+            return [];
+          };
+
+          const effect = card.curseEffect ?? '';
+          const isItemLossCurse = effect === 'lose-big-item' || effect === 'lose-small-item' || effect === 'lose-highest-bonus-item';
+          if (isItemLossCurse) {
+            const candidates = getCandidates(target, effect);
+            if (candidates.length === 0) {
+              return { ...baseState, discardDoor: [...state.discardDoor, card] };
+            }
+            if (candidates.length === 1) {
+              const item = candidates[0]!;
+              const { kept, detachedDoor } = splitAttachments(target.equipped, new Set([item.id]));
+              return {
+                ...updatePlayer(baseState, withCombatPower({ ...target, equipped: kept })),
+                discardDoor: [...state.discardDoor, card, ...detachedDoor],
+                discardTreasure: [...state.discardTreasure, item],
+              };
+            }
+            // Multiple candidates: victim must choose
+            return {
+              ...updatePlayer(baseState, target),
+              phase: GamePhase.CurseItemChoice,
+              pendingCurse: card,
+              pendingCurseItemChoices: candidates.map(c => c.id),
+              pendingCurseTarget: target.id,
+            };
+          }
+
           const { player: cursedTarget, discardedTreasure } = applyCurse(target, card);
           return {
-            ...updatePlayer(updatePlayer(state, { ...player, hand: handWithout }), cursedTarget),
+            ...updatePlayer(baseState, cursedTarget),
             discardDoor: [...state.discardDoor, card],
             discardTreasure: discardedTreasure
               ? [...state.discardTreasure, discardedTreasure]
@@ -2260,17 +2452,20 @@ export const TurnManager = {
         const giver = getPlayer(state, _playerId)!;
         const card = giver.hand.find(c => c.id === cardId);
         if (!card) return state;
+        const giverWithout = { ...giver, hand: giver.hand.filter(c => c.id !== cardId) };
+        // Self-donate = discard to appropriate pile
+        if (targetPlayerId === _playerId) {
+          const isDoor = card.type !== CardType.Treasure;
+          return {
+            ...updatePlayer(state, giverWithout),
+            discardDoor: isDoor ? [...state.discardDoor, card] : state.discardDoor,
+            discardTreasure: !isDoor ? [...state.discardTreasure, card] : state.discardTreasure,
+          };
+        }
         const receiver = getPlayer(state, targetPlayerId);
         if (!receiver) return state;
-
-        return {
-          ...state,
-          players: state.players.map(p => {
-            if (p.id === giver.id)       return { ...p, hand: p.hand.filter(c => c.id !== cardId) };
-            if (p.id === targetPlayerId) return { ...p, hand: [...p.hand, card] };
-            return p;
-          }),
-        };
+        const receiverWith = { ...receiver, hand: [...receiver.hand, card] };
+        return updatePlayer(updatePlayer(state, giverWithout), receiverWith);
       }
 
       // ---------------------------------------------------------------
@@ -2367,9 +2562,8 @@ export const TurnManager = {
           }
         }
 
-        return {
+        const resultState: GameState = {
           ...nextState,
-          ...postCombatTransition(state),
           discardTreasure: finalDiscardTreasure,
           discardDoor: finalDiscardDoor,
           neighborDiscardTarget: undefined,
@@ -2378,6 +2572,8 @@ export const TurnManager = {
           neighborPickGivesToPicker: undefined,
           neighborPickFromHandOnly: undefined,
         };
+        if (state.pendingFleeMonsters !== undefined) return afterFleeSubphase(resultState);
+        return { ...resultState, ...postCombatTransition(resultState) };
       }
 
       // ---------------------------------------------------------------
@@ -2421,13 +2617,14 @@ export const TurnManager = {
         const { kept, detachedDoor } = splitAttachments(p.equipped, discardIds);
         const discarded = p.equipped.filter(c => discardIds.has(c.id));
         const updatedP = withCombatPower({ ...p, equipped: kept });
-        return {
+        const resultState: GameState = {
           ...updatePlayer(state, updatedP),
-          phase: GamePhase.Loot,
           pendingGoldDiscardRequired: undefined,
           discardTreasure: [...state.discardTreasure, ...discarded],
           discardDoor: detachedDoor.length > 0 ? [...state.discardDoor, ...detachedDoor] : state.discardDoor,
         };
+        if (state.pendingFleeMonsters !== undefined) return afterFleeSubphase(resultState);
+        return { ...resultState, phase: GamePhase.Loot };
       }
 
       case 'DISCARD_PRE_COMBAT_ITEM': {
@@ -2532,22 +2729,22 @@ export const TurnManager = {
       // ---------------------------------------------------------------
       case 'CHOOSE_BAD_STUFF': {
         const p = getPlayer(state, state.currentPlayerId)!;
+        let resultState: GameState;
         if (action.choice === 'hand') {
           const handDoor = p.hand.filter(c => c.type !== CardType.Treasure);
           const handTreasure = p.hand.filter(c => c.type === CardType.Treasure);
-          return {
+          resultState = {
             ...updatePlayer(state, withCombatPower({ ...p, hand: [] })),
-            ...postCombatTransition(state),
+            pendingBadStuffLevels: undefined,
             discardDoor: [...state.discardDoor, ...handDoor],
             discardTreasure: [...state.discardTreasure, ...handTreasure],
           };
+        } else {
+          const levelDelta = state.pendingBadStuffLevels ?? -1;
+          resultState = { ...updatePlayer(state, applyLevelChange(p, levelDelta, false)), pendingBadStuffLevels: undefined };
         }
-        const levelDelta = state.pendingBadStuffLevels ?? -1;
-        const updatedP = applyLevelChange(p, levelDelta, false);
-        return {
-          ...updatePlayer(state, updatedP),
-          ...postCombatTransition(state),
-        };
+        if (state.pendingFleeMonsters !== undefined) return afterFleeSubphase(resultState);
+        return { ...resultState, ...postCombatTransition(resultState) };
       }
 
       // ---------------------------------------------------------------
@@ -2741,7 +2938,8 @@ export const TurnManager = {
 
       // ---------------------------------------------------------------
       case 'CHOOSE_CURSE_ITEM': {
-        const p = getPlayer(state, state.currentPlayerId)!;
+        const victimId = state.pendingCurseTarget ?? state.currentPlayerId;
+        const p = getPlayer(state, victimId)!;
         const item = p.equipped.find(c => c.id === action.cardId)!;
         const { kept, detachedDoor } = splitAttachments(p.equipped, new Set([item.id]));
         // if discarding a Class card, also remove Super Munchkin if now classless
@@ -2756,6 +2954,7 @@ export const TurnManager = {
           ...updatePlayer(state, withCombatPower({ ...p, equipped: afterSM, superMunchkinMode: updatedSuperMode })),
           pendingCurse: undefined,
           pendingCurseItemChoices: undefined,
+          pendingCurseTarget: undefined as string | undefined,
           discardDoor: [
             ...state.discardDoor,
             ...(state.pendingCurse ? [state.pendingCurse] : []),
@@ -2795,30 +2994,32 @@ export const TurnManager = {
       case 'RESOLVE_DIE_ROLL_LOSS': {
         const p = getPlayer(state, _playerId)!;
         const lostIds = new Set(action.cardIds);
+        let resultState: GameState;
         if (action.source === 'equipped') {
           const { kept, detachedDoor } = splitAttachments(p.equipped, lostIds);
           const lostTreasures = p.equipped.filter(c => lostIds.has(c.id) && c.type === CardType.Treasure);
           const lostDoors = p.equipped.filter(c => lostIds.has(c.id) && c.type !== CardType.Treasure);
           const updatedP = withCombatPower({ ...p, equipped: kept });
-          return {
+          resultState = {
             ...updatePlayer(state, updatedP),
-            ...postCombatTransition(state),
             pendingDieRollLossCount: undefined,
             discardTreasure: [...state.discardTreasure, ...lostTreasures],
             discardDoor: [...state.discardDoor, ...lostDoors, ...detachedDoor],
           };
+        } else {
+          const lostCards = p.hand.filter(c => lostIds.has(c.id));
+          const updatedP = withCombatPower({ ...p, hand: p.hand.filter(c => !lostIds.has(c.id)) });
+          const lostTreasures = lostCards.filter(c => c.type === CardType.Treasure);
+          const lostDoors = lostCards.filter(c => c.type !== CardType.Treasure);
+          resultState = {
+            ...updatePlayer(state, updatedP),
+            pendingDieRollLossCount: undefined,
+            discardTreasure: [...state.discardTreasure, ...lostTreasures],
+            discardDoor: [...state.discardDoor, ...lostDoors],
+          };
         }
-        const lostCards = p.hand.filter(c => lostIds.has(c.id));
-        const updatedP = withCombatPower({ ...p, hand: p.hand.filter(c => !lostIds.has(c.id)) });
-        const lostTreasures = lostCards.filter(c => c.type === CardType.Treasure);
-        const lostDoors = lostCards.filter(c => c.type !== CardType.Treasure);
-        return {
-          ...updatePlayer(state, updatedP),
-          ...postCombatTransition(state),
-          pendingDieRollLossCount: undefined,
-          discardTreasure: [...state.discardTreasure, ...lostTreasures],
-          discardDoor: [...state.discardDoor, ...lostDoors],
-        };
+        if (state.pendingFleeMonsters !== undefined) return afterFleeSubphase(resultState);
+        return { ...resultState, ...postCombatTransition(resultState) };
       }
 
       // ---------------------------------------------------------------
@@ -2878,20 +3079,14 @@ export const TurnManager = {
         };
 
         if (isDeath) {
-          const { discardDoor, discardTreasure } = disperseDeadItems(
-            activePlayer,
+          const withBadStuffLevel = applyFleeBadStuff(activePlayer, true);
+          const preDeathPlayer = { ...activePlayer, level: withBadStuffLevel.level };
+          return enterBodyPillage(
+            state,
+            preDeathPlayer,
             [...state.discardDoor, ...allFleeMonsters],
             state.discardTreasure,
           );
-          const deadPlayer = applyFleeBadStuff(activePlayer, true);
-          return {
-            ...updatePlayer(state, deadPlayer),
-            ...postCombatTransition(state),
-            discardDoor,
-            discardTreasure,
-            currentMonster: undefined,
-            additionalMonsters: undefined,
-          };
         }
 
         const updatedPlayer = applyFleeBadStuff(activePlayer, false);
@@ -2902,9 +3097,10 @@ export const TurnManager = {
             ...state,
             phase: GamePhase.BadStuffChoice,
             pendingBadStuffLevels: levelDelta,
-            discardDoor: [...state.discardDoor, ...allFleeMonsters],
+            discardDoor: [...state.discardDoor, monster],
             currentMonster: undefined,
             additionalMonsters: undefined,
+            pendingFleeMonsters: state.additionalMonsters ?? [],
           };
         }
 
@@ -2917,14 +3113,12 @@ export const TurnManager = {
           const lostTreasure = allEquipped.filter(c => c.type === CardType.Treasure);
           const handDoor = allHand.filter(c => c.type !== CardType.Treasure);
           const handTreasure = allHand.filter(c => c.type === CardType.Treasure);
-          return {
-            ...updatePlayer(state, stripped),
-            ...postCombatTransition(state),
-            discardDoor: [...state.discardDoor, ...allFleeMonsters, ...lostDoor, ...handDoor],
-            discardTreasure: [...state.discardTreasure, ...lostTreasure, ...handTreasure],
-            currentMonster: undefined,
-            additionalMonsters: undefined,
-          };
+          return continueFleeOrEnd(
+            state,
+            stripped,
+            [...lostDoor, ...handDoor],
+            [...lostTreasure, ...handTreasure],
+          );
         }
 
         // badStuffDiscardHand: player discards entire hand, no level loss
@@ -2932,14 +3126,7 @@ export const TurnManager = {
           const lostDoor = updatedPlayer.hand.filter(c => c.type !== CardType.Treasure);
           const lostTreasure = updatedPlayer.hand.filter(c => c.type === CardType.Treasure);
           const stripped = withCombatPower({ ...updatedPlayer, hand: [] });
-          return {
-            ...updatePlayer(state, stripped),
-            ...postCombatTransition(state),
-            discardDoor: [...state.discardDoor, ...allFleeMonsters, ...lostDoor],
-            discardTreasure: [...state.discardTreasure, ...lostTreasure],
-            currentMonster: undefined,
-            additionalMonsters: undefined,
-          };
+          return continueFleeOrEnd(state, stripped, lostDoor, lostTreasure);
         }
 
         // badStuffLoseAllClasses: player loses ALL class cards; if no class → apply levelDelta (badStuffLevel)
@@ -2950,16 +3137,11 @@ export const TurnManager = {
             const { kept, detachedDoor } = splitAttachments(updatedPlayer.equipped, classIds);
             const { equipped: afterSM, removedSuperMunchkin } = removeSuperMunchkinIfClassless(kept);
             const stripped = withCombatPower({ ...updatedPlayer, equipped: afterSM, superMunchkinMode: undefined });
-            return {
-              ...updatePlayer(state, stripped),
-              ...postCombatTransition(state),
-              discardDoor: [
-                ...state.discardDoor, ...allFleeMonsters,
-                ...classCards, ...detachedDoor, ...(removedSuperMunchkin ? [removedSuperMunchkin] : []),
-              ],
-              currentMonster: undefined,
-              additionalMonsters: undefined,
-            };
+            return continueFleeOrEnd(
+              state,
+              stripped,
+              [...classCards, ...detachedDoor, ...(removedSuperMunchkin ? [removedSuperMunchkin] : [])],
+            );
           }
           // no class → fall through to normal levelDelta path
         }
@@ -2971,14 +3153,7 @@ export const TurnManager = {
             const { kept, detachedDoor } = splitAttachments(updatedPlayer.equipped, bigItemIds);
             const lostBigItems = updatedPlayer.equipped.filter(c => bigItemIds.has(c.id));
             const playerAfterLoss = withCombatPower({ ...updatedPlayer, equipped: kept });
-            return {
-              ...updatePlayer(state, playerAfterLoss),
-              ...postCombatTransition(state),
-              discardDoor: [...state.discardDoor, ...allFleeMonsters, ...detachedDoor],
-              discardTreasure: [...state.discardTreasure, ...lostBigItems],
-              currentMonster: undefined,
-              additionalMonsters: undefined,
-            };
+            return continueFleeOrEnd(state, playerAfterLoss, detachedDoor, lostBigItems);
           }
         }
 
@@ -2988,13 +3163,7 @@ export const TurnManager = {
           if (headgear) {
             const { kept, detachedDoor } = splitAttachments(updatedPlayer.equipped, new Set([headgear.id]));
             const stripped = withCombatPower({ ...updatedPlayer, equipped: kept });
-            return {
-              ...updatePlayer(state, stripped),
-              ...postCombatTransition(state),
-              discardDoor: [...state.discardDoor, ...allFleeMonsters, headgear, ...detachedDoor],
-              currentMonster: undefined,
-              additionalMonsters: undefined,
-            };
+            return continueFleeOrEnd(state, stripped, [headgear, ...detachedDoor]);
           }
         }
 
@@ -3009,14 +3178,7 @@ export const TurnManager = {
             const stripped = withCombatPower({ ...updatedPlayer, equipped: kept });
             const lostTreasure = armorFoot.filter(c => c.type === CardType.Treasure);
             const lostDoor = armorFoot.filter(c => c.type !== CardType.Treasure);
-            return {
-              ...updatePlayer(state, stripped),
-              ...postCombatTransition(state),
-              discardDoor: [...state.discardDoor, ...allFleeMonsters, ...lostDoor, ...detachedDoor],
-              discardTreasure: [...state.discardTreasure, ...lostTreasure],
-              currentMonster: undefined,
-              additionalMonsters: undefined,
-            };
+            return continueFleeOrEnd(state, stripped, [...lostDoor, ...detachedDoor], lostTreasure);
           }
         }
 
@@ -3028,16 +3190,11 @@ export const TurnManager = {
               const { kept, detachedDoor } = splitAttachments(updatedPlayer.equipped, new Set([wizardCard.id]));
               const { equipped: afterSM, removedSuperMunchkin } = removeSuperMunchkinIfClassless(kept);
               const stripped = withCombatPower({ ...updatedPlayer, equipped: afterSM });
-              return {
-                ...updatePlayer(state, stripped),
-                ...postCombatTransition(state),
-                discardDoor: [
-                  ...state.discardDoor, ...allFleeMonsters, wizardCard, ...detachedDoor,
-                  ...(removedSuperMunchkin ? [removedSuperMunchkin] : []),
-                ],
-                currentMonster: undefined,
-                additionalMonsters: undefined,
-              };
+              return continueFleeOrEnd(
+                state,
+                stripped,
+                [wizardCard, ...detachedDoor, ...(removedSuperMunchkin ? [removedSuperMunchkin] : [])],
+              );
             }
           }
           // Non-wizard: death handled by standard levelDelta = -99
@@ -3050,23 +3207,18 @@ export const TurnManager = {
           if (totalGold >= required) {
             return {
               ...updatePlayer(state, updatedPlayer),
-              ...postCombatTransition(state),
               phase: GamePhase.BadStuffGoldDiscard,
               pendingGoldDiscardRequired: required,
-              discardDoor: [...state.discardDoor, ...allFleeMonsters],
-              currentMonster: undefined, additionalMonsters: undefined,
+              discardDoor: [...state.discardDoor, monster],
+              currentMonster: undefined,
+              additionalMonsters: undefined,
+              pendingFleeMonsters: state.additionalMonsters ?? [],
             };
           }
           const lostItems = [...updatedPlayer.equipped];
           const stripped = withCombatPower({ ...updatedPlayer, equipped: [] });
           const final = applyLevelChange(stripped, levelDelta, false);
-          return {
-            ...updatePlayer(state, final),
-            ...postCombatTransition(state),
-            discardDoor: [...state.discardDoor, ...allFleeMonsters],
-            discardTreasure: [...state.discardTreasure, ...lostItems],
-            currentMonster: undefined, additionalMonsters: undefined,
-          };
+          return continueFleeOrEnd(state, final, [], lostItems);
         }
 
         // badStuffDieRollItemLoss: roll a die, player loses that many equipped OR hand cards
@@ -3076,9 +3228,10 @@ export const TurnManager = {
             ...updatePlayer(state, updatedPlayer),
             phase: GamePhase.BadStuffDieRollLoss,
             pendingDieRollLossCount: dieRoll,
-            discardDoor: [...state.discardDoor, ...allFleeMonsters],
+            discardDoor: [...state.discardDoor, monster],
             currentMonster: undefined,
             additionalMonsters: undefined,
+            pendingFleeMonsters: state.additionalMonsters ?? [],
           };
         }
 
@@ -3096,9 +3249,10 @@ export const TurnManager = {
             return {
               ...updatePlayer(state, updatedPlayer),
               phase: GamePhase.NeighborItemRemoval,
-              discardDoor: [...state.discardDoor, ...allFleeMonsters],
+              discardDoor: [...state.discardDoor, monster],
               currentMonster: undefined,
               additionalMonsters: undefined,
+              pendingFleeMonsters: state.additionalMonsters ?? [],
               neighborDiscardTarget: state.currentPlayerId,
               neighborDiscardQueue: highestQueue,
               neighborPickGivesToPicker: true,
@@ -3118,9 +3272,10 @@ export const TurnManager = {
             return {
               ...updatePlayer(state, updatedPlayer),
               phase: GamePhase.NeighborItemRemoval,
-              discardDoor: [...state.discardDoor, ...allFleeMonsters],
+              discardDoor: [...state.discardDoor, monster],
               currentMonster: undefined,
               additionalMonsters: undefined,
+              pendingFleeMonsters: state.additionalMonsters ?? [],
               neighborDiscardTarget: state.currentPlayerId,
               neighborDiscardQueue: allPlayersQueue,
               neighborPickIncludesHand: true,
@@ -3139,9 +3294,10 @@ export const TurnManager = {
           return {
             ...updatePlayer(state, updatedPlayer),
             phase: GamePhase.NeighborItemRemoval,
-            discardDoor: [...state.discardDoor, ...allFleeMonsters],
+            discardDoor: [...state.discardDoor, monster],
             currentMonster: undefined,
             additionalMonsters: undefined,
+            pendingFleeMonsters: state.additionalMonsters ?? [],
             neighborDiscardTarget: state.currentPlayerId,
             neighborDiscardQueue: neighborQueue,
           };
@@ -3156,9 +3312,10 @@ export const TurnManager = {
           return {
             ...updatePlayer(state, updatedPlayer),
             phase: GamePhase.NeighborItemRemoval,
-            discardDoor: [...state.discardDoor, ...allFleeMonsters],
+            discardDoor: [...state.discardDoor, monster],
             currentMonster: undefined,
             additionalMonsters: undefined,
+            pendingFleeMonsters: state.additionalMonsters ?? [],
             neighborDiscardTarget: state.currentPlayerId,
             neighborDiscardQueue: handToOthersQueue,
             neighborPickFromHandOnly: true,
@@ -3166,13 +3323,7 @@ export const TurnManager = {
           };
         }
 
-        return {
-          ...updatePlayer(state, updatedPlayer),
-          ...postCombatTransition(state),
-          discardDoor: [...state.discardDoor, ...allFleeMonsters],
-          currentMonster: undefined,
-          additionalMonsters: undefined,
-        };
+        return continueFleeOrEnd(state, updatedPlayer);
       }
 
       // ---------------------------------------------------------------
@@ -3447,12 +3598,45 @@ export const TurnManager = {
 
       // ---------------------------------------------------------------
       case 'END_TURN': {
-        return {
-          ...state,
-          phase: GamePhase.KickDown,
-          currentPlayerId: nextPlayerId(state),
-          currentMonster: undefined,
-        };
+        return startNextTurn(state);
+      }
+
+      // ---------------------------------------------------------------
+      case 'GIVE_ITEM': {
+        const giver = getPlayer(state, _playerId)!;
+        const item = giver.equipped.find(c => c.id === action.itemId)!;
+        const { kept: giverEquipped, detachedDoor } = splitAttachments(giver.equipped, new Set([action.itemId]));
+        const updatedGiver = withCombatPower({ ...giver, equipped: giverEquipped });
+        const recipient = getPlayer(state, action.targetPlayerId)!;
+        const updatedRecipient = withCombatPower({ ...recipient, equipped: [...recipient.equipped, item] });
+        let s = updatePlayer(updatePlayer(state, updatedGiver), updatedRecipient);
+        if (detachedDoor.length > 0) s = { ...s, discardDoor: [...s.discardDoor, ...detachedDoor] };
+        return s;
+      }
+
+      // ---------------------------------------------------------------
+      case 'PICK_BODY_LOOT': {
+        const picker = getPlayer(state, _playerId)!;
+        const card = state.bodyPillagingItems!.find(c => c.id === action.cardId)!;
+        const remainingItems = state.bodyPillagingItems!.filter(c => c.id !== action.cardId);
+        const [, ...nextQueue] = state.bodyPillagingQueue!;
+        const updatedPicker = withCombatPower({ ...picker, hand: [...picker.hand, card] });
+        const baseState = updatePlayer(state, updatedPicker);
+
+        if (nextQueue.length === 0 || remainingItems.length === 0) {
+          const toDoor = remainingItems.filter(c => c.type !== CardType.Treasure);
+          const toTreasure = remainingItems.filter(c => c.type === CardType.Treasure);
+          return {
+            ...baseState,
+            ...postCombatTransition(baseState),
+            bodyPillagingItems: undefined,
+            bodyPillagingQueue: undefined,
+            discardDoor: [...state.discardDoor, ...toDoor],
+            discardTreasure: [...state.discardTreasure, ...toTreasure],
+          };
+        }
+
+        return { ...baseState, bodyPillagingItems: remainingItems, bodyPillagingQueue: nextQueue };
       }
     }
   },
@@ -3467,12 +3651,7 @@ export const TurnManager = {
         return { ...state, phase: GamePhase.EndTurn };
 
       case GamePhase.EndTurn:
-        return {
-          ...state,
-          phase: GamePhase.KickDown,
-          currentPlayerId: nextPlayerId(state),
-          currentMonster: undefined,
-        };
+        return startNextTurn(state);
 
       case GamePhase.KickDown:
       default:

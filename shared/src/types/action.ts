@@ -60,4 +60,8 @@ export type ClientGameAction =
   /** Bad stuff die roll loss: player chooses source (equipped or hand) and which card IDs to discard */
   | { type: 'RESOLVE_DIE_ROLL_LOSS'; source: 'equipped' | 'hand'; cardIds: string[] }
   /** Bribe a monster to avoid combat: discard one equipped item worth ≥ monster.bribeToAvoidGoldValue */
-  | { type: 'BRIBE_MONSTER'; discardItemId: string };
+  | { type: 'BRIBE_MONSTER'; discardItemId: string }
+  /** Give an equipped item to another player (out of combat — bribes, gifts) */
+  | { type: 'GIVE_ITEM'; itemId: string; targetPlayerId: string }
+  /** During BodyPillage: current picker takes one card from the dead player's items */
+  | { type: 'PICK_BODY_LOOT'; cardId: string };

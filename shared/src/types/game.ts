@@ -29,6 +29,8 @@ export enum GamePhase {
   Loot = 'Loot',
   Charity = 'Charity',
   EndTurn = 'EndTurn',
+  /** Items from a dead player are available for other players to pick (highest level first) */
+  BodyPillage = 'BodyPillage',
 }
 
 export interface GameState {
@@ -87,4 +89,12 @@ export interface GameState {
   combatBackstabPenalty?: number;
   /** Log of backstabs this combat: [thiefId, victimId] pairs (for once-per-victim-per-thief enforcement) */
   backstabLog?: { thiefId: string; victimId: string }[];
+  /** During BodyPillage: cards available for other players to pick (sorted by picker order) */
+  bodyPillagingItems?: Card[];
+  /** During BodyPillage: player IDs still to pick (first = current picker), highest level first */
+  bodyPillagingQueue?: string[];
+  /** During multi-monster flee: monsters still to flee after current bad-stuff resolution */
+  pendingFleeMonsters?: Card[];
+  /** During CurseItemChoice triggered by a manually played curse: the ID of the player being cursed */
+  pendingCurseTarget?: string;
 }

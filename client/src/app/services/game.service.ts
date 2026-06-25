@@ -24,8 +24,9 @@ export class GameService {
   readonly phase       = computed(() => this.gameState()?.phase ?? null);
   readonly currentPlayerId = computed(() => this.gameState()?.currentPlayerId ?? null);
   readonly isMyTurn    = computed(() => this.currentPlayerId() === this.myPlayerId());
-  readonly monster     = computed(() => this.gameState()?.currentMonster ?? null);
+  readonly monster      = computed(() => this.gameState()?.currentMonster ?? null);
   readonly monsterPower = computed(() => this.monster()?.power ?? 0);
+  readonly pendingCurse = computed(() => this.gameState()?.pendingCurse ?? null);
 
   readonly allPlayers  = computed(() => this.gameState()?.players ?? []);
 
@@ -33,7 +34,29 @@ export class GameService {
     this.allPlayers().find(p => p.id === this.myPlayerId()) ?? null,
   );
 
-  readonly myHand = computed(() => this.myPlayer()?.hand ?? []);
+  readonly myHand     = computed(() => this.myPlayer()?.hand ?? []);
+  readonly myEquipped = computed(() => this.myPlayer()?.equipped ?? []);
+
+  /** During Charity: true if the active player must discard (they are lowest or tied for lowest among living players) */
+  readonly charityMustDiscard = computed(() => {
+    const me = this.myPlayer();
+    if (!me) return false;
+    const livingOthers = this.allPlayers().filter(p => p.id !== me.id && !p.isDead);
+    if (livingOthers.length === 0) return true;
+    const minLiving = Math.min(...livingOthers.map(p => p.level));
+    return me.level <= minLiving;
+  });
+
+  /** During Charity: living players tied for the lowest level (empty if mustDiscard) */
+  readonly charityTargets = computed(() => {
+    if (this.charityMustDiscard()) return [];
+    const me = this.myPlayer();
+    if (!me) return [];
+    const others = this.allPlayers().filter(p => p.id !== me.id && !p.isDead);
+    if (others.length === 0) return [];
+    const minLevel = Math.min(...others.map(p => p.level));
+    return others.filter(p => p.level === minLevel);
+  });
 
   readonly myTotalPower = computed(() => this.myPlayer()?.combatPower ?? 0);
 

@@ -20,6 +20,8 @@ export interface Player {
   nextCombatPenalty?: number;
   /** Next combat: equipment bonuses are ignored except armor (cleared after the combat) */
   nextCombatNoItemBonus?: boolean;
+  /** True from the moment the player dies until their next turn starts (they draw 4+4 and this is cleared) */
+  isDead?: boolean;
 }
 
 /** Returns the player's active race id, defaulting to 'human' when no Race card is equipped. */

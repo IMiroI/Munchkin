@@ -42,4 +42,6 @@ export type GameAction =
   | { type: 'DISCARD_ITEMS_FOR_GOLD'; cardIds: string[] }
   | { type: 'MATCH_GOLD_VALUE'; cardIds: string[] }
   | { type: 'THIEF_SWAP_TREASURES'; discardCardIds: string[] }
-  | { type: 'BRIBE_MONSTER'; discardItemId: string };
+  | { type: 'BRIBE_MONSTER'; discardItemId: string }
+  | { type: 'GIVE_ITEM'; itemId: string; targetPlayerId: string }
+  | { type: 'PICK_BODY_LOOT'; cardId: string };
