@@ -37,6 +37,7 @@ export interface ServerToClientEvents {
   'game:started': (state: RoomState) => void;
   'game:state': (state: GameState) => void;
   'game:log': (entry: ActionLogEntry) => void;
+  'game:error': (error: { message: string }) => void;
   'game:help:requested': (data: { gameId: string; requesterId: string; requesterName: string }) => void;
   'game:help:responded': (data: { gameId: string; helperId: string; helperName: string; accepted: boolean }) => void;
 }

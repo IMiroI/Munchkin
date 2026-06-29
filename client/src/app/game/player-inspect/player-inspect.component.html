@@ -1,0 +1,304 @@
+<!-- Backdrop -->
+<div class="fixed inset-0 z-[800] bg-black/70 backdrop-blur-sm"
+     (click)="closed.emit()">
+</div>
+
+<!-- Panel — slides in from right -->
+<aside class="fixed top-0 right-0 bottom-0 z-[801]
+              w-full max-w-sm
+              bg-dungeon-950 border-l border-dungeon-600/40
+              flex flex-col shadow-2xl overflow-hidden
+              animate-entrance">
+
+  <!-- ── Header ── -->
+  <div class="flex items-center gap-3 px-5 py-4
+              border-b border-dungeon-700/40 bg-dungeon-900/80 shrink-0">
+    <!-- Level orb -->
+    <div class="w-11 h-11 rounded-full flex items-center justify-center shrink-0 font-black text-lg
+                bg-gradient-to-br from-gold-700/30 to-gold-900/50
+                border-2 border-gold-700/60 text-gold-300 shadow-[0_0_12px_rgba(200,140,30,0.25)]">
+      {{ player().level }}
+    </div>
+
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-2">
+        <h2 class="font-heading font-bold text-gold-200 text-base truncate">{{ player().name }}</h2>
+        @if (isMe()) {
+          <span class="font-heading text-[8px] tracking-[0.18em] uppercase
+                       bg-gold-950/80 border border-gold-800/50 text-gold-500 px-2 py-0.5 rounded-full">
+            VOUS
+          </span>
+        }
+        @if (player().isDead) {
+          <span class="font-heading text-[8px] tracking-[0.14em] uppercase
+                       bg-blood-950/80 border border-blood-700/50 text-blood-400 px-2 py-0.5 rounded-full">
+            MORT
+          </span>
+        }
+      </div>
+      <div class="flex items-center gap-3 mt-0.5">
+        <span class="text-[11px] text-dungeon-400">⚔ {{ player().combatPower }}</span>
+        <span class="text-dungeon-600 text-[9px]">·</span>
+        <span class="text-[11px] text-dungeon-500">{{ genderLabel(player()) }}</span>
+      </div>
+    </div>
+
+    <!-- Close -->
+    <button class="w-8 h-8 flex items-center justify-center rounded-full shrink-0
+                   bg-dungeon-700/70 border border-dungeon-600/40 text-dungeon-400
+                   hover:bg-dungeon-600 hover:text-white transition-colors text-sm"
+            (click)="closed.emit()">
+      ✕
+    </button>
+  </div>
+
+  <!-- ── Content ── -->
+  <div class="flex-1 overflow-y-auto p-5 space-y-6">
+
+    <!-- Equipped items section -->
+    <section>
+      <div class="flex items-center gap-2 mb-3">
+        <p class="font-heading text-[9px] uppercase tracking-[0.22em] text-gold-800/80">
+          Équipement
+        </p>
+        <span class="font-heading text-[9px] text-dungeon-600 tabular-nums">
+          ({{ player().equipped.length }})
+        </span>
+      </div>
+
+      @if (player().equipped.length > 0) {
+        <div class="grid grid-cols-3 gap-2.5">
+          @for (card of player().equipped; track card.id) {
+            <button
+              class="relative overflow-hidden rounded-xl border-2 select-none cursor-pointer
+                     transition-all duration-150 hover:-translate-y-1 hover:shadow-xl active:scale-95
+                     group focus:outline-none"
+              style="aspect-ratio: 63.5/88.9;"
+              [class]="colorClass(card)"
+              (click)="zoomedCard.set(card)">
+
+              @if (card.image) {
+                <img [src]="card.image" [alt]="card.name"
+                     class="absolute inset-0 w-full h-full object-cover rounded-[10px]">
+                <div class="absolute bottom-0 left-0 right-0
+                            bg-gradient-to-t from-black/90 to-transparent
+                            pt-6 pb-1 px-1 rounded-b-[10px]">
+                  <p class="text-[7px] font-semibold text-white/90 leading-tight text-center truncate">
+                    {{ card.name }}
+                  </p>
+                </div>
+              } @else {
+                <!-- Inner frame -->
+                <div class="absolute inset-[3px] rounded-lg border border-white/6 pointer-events-none z-20"></div>
+                <div class="absolute inset-0 bg-gradient-to-b from-white/8 via-transparent to-black/15 pointer-events-none z-10"></div>
+                <!-- Type -->
+                <div class="absolute top-1.5 left-1.5 right-1.5 z-10">
+                  <span class="font-heading text-[6px] uppercase tracking-[0.08em] opacity-50 leading-none">
+                    {{ typeLabel(card) }}
+                  </span>
+                </div>
+                <!-- Art symbol -->
+                <div class="absolute inset-0 flex items-center justify-center z-10">
+                  <span class="text-[22px] leading-none opacity-12 font-bold select-none">
+                    {{ cardArtSymbol(card) }}
+                  </span>
+                </div>
+                <!-- Name -->
+                <div class="absolute bottom-7 left-1 right-1 z-10 text-center">
+                  <span class="text-[7px] font-semibold leading-tight break-words hyphens-auto">
+                    {{ card.name }}
+                  </span>
+                </div>
+                <!-- Stat -->
+                @if (statBadge(card); as badge) {
+                  <div class="absolute bottom-1 inset-x-0 z-10 text-center leading-none">
+                    <span class="text-[16px] font-black tabular-nums" [class]="badgeColor(card)">
+                      {{ badge.value }}
+                    </span>
+                    @if (badge.sub) {
+                      <div class="font-heading text-[5px] tracking-widest opacity-50" [class]="badgeColor(card)">
+                        {{ badge.sub }}
+                      </div>
+                    }
+                  </div>
+                }
+              }
+
+              <!-- Hover zoom hint -->
+              <div class="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100
+                          transition-opacity rounded-[10px] z-30 pointer-events-none">
+              </div>
+
+              <!-- Badges -->
+              @if (card.isBigItem) {
+                <span class="absolute top-1 right-1 font-heading text-[5px] bg-orange-900/90
+                             px-1 py-px rounded text-orange-300 leading-none z-40 border border-orange-800/40">
+                  GRD
+                </span>
+              }
+            </button>
+          }
+        </div>
+      } @else {
+        <div class="flex flex-col items-center gap-2 py-6 text-dungeon-600">
+          <span class="text-3xl opacity-20 select-none">🛡</span>
+          <span class="font-heading text-[10px] italic">Aucun équipement</span>
+        </div>
+      }
+    </section>
+
+    <!-- Hand section (count only — private) -->
+    <section class="border-t border-dungeon-700/40 pt-5">
+      <p class="font-heading text-[9px] uppercase tracking-[0.22em] text-gold-800/80 mb-3">
+        Main
+      </p>
+      <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl
+                  bg-dungeon-800/50 border border-dungeon-600/30">
+        <span class="text-xl opacity-40 select-none">🃏</span>
+        <span class="text-sm text-dungeon-300 font-heading">
+          {{ player().hand.length }} carte{{ player().hand.length !== 1 ? 's' : '' }}
+        </span>
+        @if (!isMe()) {
+          <span class="ml-auto font-heading text-[9px] text-dungeon-600 italic">privé</span>
+        }
+      </div>
+    </section>
+
+  </div>
+</aside>
+
+<!-- ── Card zoom modal ── -->
+@if (zoomedCard(); as card) {
+  <div class="fixed inset-0 z-[900] flex items-center justify-center p-4"
+       (click)="zoomedCard.set(null)">
+
+    <div class="absolute inset-0 bg-black/90 backdrop-blur-md"></div>
+
+    <div class="relative z-10 flex flex-col sm:flex-row gap-0 max-w-lg w-full
+                bg-dungeon-900 border border-dungeon-500/50 rounded-3xl shadow-2xl
+                overflow-hidden max-h-[90dvh] animate-entrance"
+         (click)="$event.stopPropagation()">
+
+      <!-- Card visual -->
+      <div class="flex items-center justify-center shrink-0 p-5 sm:w-52
+                  bg-dungeon-950/40 border-b sm:border-b-0 sm:border-r border-dungeon-700/30">
+        @if (card.image) {
+          <img [src]="card.image" [alt]="card.name"
+               class="w-40 rounded-2xl shadow-2xl border-2 border-dungeon-600/50"
+               style="aspect-ratio: 63.5/88.9; object-fit: cover;">
+        } @else {
+          <div class="relative overflow-hidden w-40 rounded-2xl border-2 flex flex-col select-none"
+               style="aspect-ratio: 63.5/88.9;"
+               [class]="colorClass(card)">
+            <div class="absolute inset-[4px] rounded-xl border border-white/6 pointer-events-none z-20"></div>
+            <div class="absolute inset-0 bg-gradient-to-b from-white/8 via-transparent to-black/15 rounded-2xl pointer-events-none z-10"></div>
+            <div class="flex items-center justify-between px-3 pt-3 pb-1 shrink-0 relative z-10">
+              <span class="font-heading text-[8px] uppercase tracking-[0.1em] opacity-55">{{ typeLabel(card) }}</span>
+              <span class="text-[8px] opacity-20">◆</span>
+            </div>
+            <div class="h-px bg-white/8 mx-3 shrink-0"></div>
+            <div class="flex-1 flex flex-col items-center justify-center px-3 py-2 relative z-10 gap-1">
+              <span class="text-4xl leading-none opacity-12 font-bold">{{ cardArtSymbol(card) }}</span>
+              <span class="text-xs font-semibold text-center leading-snug mt-1">{{ card.name }}</span>
+            </div>
+            <div class="h-px bg-white/8 mx-3 shrink-0"></div>
+            @if (statBadge(card); as badge) {
+              <div class="text-center py-2.5 shrink-0 relative z-10">
+                <span class="text-3xl font-black leading-none tabular-nums" [class]="badgeColor(card)">
+                  {{ badge.value }}
+                </span>
+                @if (badge.sub) {
+                  <div class="font-heading text-[8px] tracking-widest opacity-50 mt-px" [class]="badgeColor(card)">
+                    {{ badge.sub }}
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="h-10 shrink-0"></div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Details -->
+      <div class="flex-1 flex flex-col gap-3 p-5 overflow-y-auto">
+        <div>
+          <p class="font-heading text-[9px] uppercase tracking-[0.16em] text-dungeon-400 mb-1">
+            {{ typeLabel(card) }}
+          </p>
+          <h2 class="text-lg font-bold text-gold-200 leading-snug">{{ card.name }}</h2>
+        </div>
+
+        <div class="flex flex-wrap gap-1.5">
+          @if ((card.power ?? 0) > 0) {
+            <span class="font-heading text-[10px] px-2.5 py-1 rounded-full
+                         bg-amber-950/60 border border-amber-800/50 text-amber-400">
+              +{{ card.power }} puissance
+            </span>
+          }
+          @if (card.levelUp != null) {
+            <span class="font-heading text-[10px] px-2.5 py-1 rounded-full
+                         bg-green-950/60 border border-green-800/50 text-green-400">
+              +{{ card.levelUp }} niveau
+            </span>
+          }
+          @if ((card.fleeBonus ?? 0) > 0) {
+            <span class="font-heading text-[10px] px-2.5 py-1 rounded-full
+                         bg-sky-950/60 border border-sky-800/50 text-sky-400">
+              +{{ card.fleeBonus }} fuite
+            </span>
+          }
+          @if (card.isOneShot) {
+            <span class="font-heading text-[10px] px-2.5 py-1 rounded-full
+                         bg-amber-950/60 border border-amber-700/50 text-amber-300">
+              Usage unique
+            </span>
+          }
+          @if (card.isBigItem) {
+            <span class="font-heading text-[10px] px-2.5 py-1 rounded-full
+                         bg-orange-950/60 border border-orange-800/50 text-orange-400">
+              Grand objet
+            </span>
+          }
+          @if (card.goldValue) {
+            <span class="font-heading text-[10px] px-2.5 py-1 rounded-full
+                         bg-gold-950/60 border border-gold-900/50 text-gold-400">
+              {{ card.goldValue }} po
+            </span>
+          }
+          @if (card.equipSlot) {
+            <span class="font-heading text-[10px] px-2.5 py-1 rounded-full
+                         bg-dungeon-800/60 border border-dungeon-600/50 text-dungeon-300">
+              {{ card.equipSlot }}
+            </span>
+          }
+        </div>
+
+        @if (card.effect) {
+          <p class="text-xs text-dungeon-300 leading-relaxed">{{ card.effect }}</p>
+        }
+
+        @if (card.badStuff) {
+          <div class="border-t border-dungeon-700/40 pt-3">
+            <p class="font-heading text-[9px] uppercase tracking-wider text-blood-500 mb-1.5">Châtiment</p>
+            <p class="text-xs text-red-300/80 leading-relaxed">{{ card.badStuff }}</p>
+          </div>
+        }
+
+        <div class="mt-auto pt-2">
+          <button class="mkn-btn-ghost w-full !py-2.5 !text-sm" (click)="zoomedCard.set(null)">
+            Fermer
+          </button>
+        </div>
+      </div>
+
+      <!-- Close icon -->
+      <button class="absolute top-3 right-3 w-8 h-8 flex items-center justify-center
+                     rounded-full bg-dungeon-700/80 text-dungeon-300 hover:text-white
+                     hover:bg-dungeon-600 transition-colors text-sm z-10 border border-dungeon-600/30"
+              (click)="zoomedCard.set(null)">
+        ✕
+      </button>
+    </div>
+  </div>
+}

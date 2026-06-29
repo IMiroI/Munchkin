@@ -1,7 +1,11 @@
+import type { Card } from './card';
+
 export interface ActionLogEntry {
   playerName: string;
   description: string;
   timestamp: number;
+  /** Card associated with this log entry (for visual display) */
+  card?: Card;
 }
 
 /** Actions the client sends to the server. The server adds any randomness (e.g. die rolls). */

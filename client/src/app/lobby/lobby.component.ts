@@ -32,6 +32,7 @@ export class LobbyComponent implements OnInit {
   protected readonly step = signal<'auth' | 'lobby' | 'room'>('auth');
   protected readonly playerName = signal('');
   protected readonly nameInput = signal('');
+  protected readonly genderInput = signal<'male' | 'female'>('male');
   protected readonly joinCode = signal('');
   protected readonly roomState = signal<RoomState | null>(null);
   protected readonly error = signal('');
@@ -94,10 +95,10 @@ export class LobbyComponent implements OnInit {
       const resp = await fetch(`${SERVER_URL}/auth/guest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, gender: this.genderInput() }),
       });
       if (!resp.ok) throw new Error('Server error');
-      const data = await resp.json() as { jwt: string; playerId: string; name: string };
+      const data = await resp.json() as { jwt: string; playerId: string; name: string; gender: 'male' | 'female' };
       sessionStorage.setItem('jwt', data.jwt);
       this.gameService.setMyPlayerId(data.playerId);
       this.playerName.set(data.name);

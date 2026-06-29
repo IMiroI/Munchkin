@@ -9,9 +9,9 @@ import type {
   GameState,
 } from '@munchkin/shared';
 import { GamePhase } from '@munchkin/shared';
+import type { GameAction } from './engine/index.js';
 import { RoomManager } from './room/RoomManager.js';
 import { DeckManager, TurnManager } from './engine/index.js';
-import type { GameAction } from './engine/index.js';
 import { GameRepository } from './db/index.js';
 
 const PORT = process.env['PORT'] ?? 3000;
@@ -21,6 +21,7 @@ const httpServer = createServer(app);
 interface SocketData {
   playerId: string;
   playerName: string;
+  playerGender: 'male' | 'female';
 }
 
 const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(httpServer, {
@@ -41,19 +42,51 @@ io.use((socket, next) => {
     try {
       const payload = JSON.parse(
         Buffer.from(token.split('.')[1]!, 'base64url').toString('utf-8')
-      ) as { sub?: string; name?: string };
+      ) as { sub?: string; name?: string; gender?: string };
       socket.data.playerId = payload.sub ?? socket.id;
       socket.data.playerName = payload.name ?? 'Player';
+      socket.data.playerGender = payload.gender === 'female' ? 'female' : 'male';
     } catch {
       socket.data.playerId = socket.id;
       socket.data.playerName = 'Player';
+      socket.data.playerGender = 'male';
     }
   } else {
     socket.data.playerId = socket.id;
     socket.data.playerName = 'Player';
+    socket.data.playerGender = 'male';
   }
   next();
 });
+
+function buildActionErrorMessage(state: GameState, playerId: string, action: GameAction): string {
+  const isActive = state.currentPlayerId === playerId;
+  const phaseName: Record<string, string> = {
+    [GamePhase.KickDown]:    'Ouvrir la porte',
+    [GamePhase.MonsterFight]:'Combat',
+    [GamePhase.Loot]:        'Pillage',
+    [GamePhase.Charity]:     'Charité',
+    [GamePhase.CurseReaction]: 'Réaction malédiction',
+    [GamePhase.FleeReaction]:  'Fuite',
+    [GamePhase.BodyPillage]:   'Pillage du cadavre',
+  };
+  const phase = phaseName[state.phase] ?? state.phase;
+  if (!isActive && ['KICK_DOOR', 'LOOT_ROOM', 'PASS_LOOT', 'END_TURN', 'FIGHT_MONSTER', 'RUN_AWAY'].includes(action.type)) {
+    return "Ce n'est pas votre tour.";
+  }
+  switch (action.type) {
+    case 'KICK_DOOR':      return `Impossible d'ouvrir la porte en phase "${phase}".`;
+    case 'LOOT_ROOM':      return `Impossible de piller en phase "${phase}".`;
+    case 'FIGHT_MONSTER':  return `Impossible de combattre en phase "${phase}".`;
+    case 'RUN_AWAY':       return `Impossible de fuir en phase "${phase}".`;
+    case 'PLAY_CARD':      return `Cette carte ne peut pas être jouée en phase "${phase}".`;
+    case 'DONATE_CARD':    return `Impossible de donner cette carte maintenant.`;
+    case 'GIVE_ITEM':      return `Impossible de donner cet objet maintenant.`;
+    case 'END_TURN':       return `Impossible de terminer le tour (trop de cartes en main ?).`;
+    case 'PICK_BODY_LOOT': return `Ce n'est pas votre tour de choisir.`;
+    default:               return `Action impossible en phase "${phase}".`;
+  }
+}
 
 function buildLogEntry(
   state: GameState,
@@ -66,16 +99,15 @@ function buildLogEntry(
   switch (action.type) {
     case 'KICK_DOOR': {
       const monster = newState.currentMonster;
-      return {
-        playerName,
-        description: monster
-          ? `ouvre la porte… ${monster.name} !`
-          : 'ouvre la porte — rien.',
-        timestamp: ts,
-      };
+      const revealed = newState.lastRevealedCard;
+      return monster
+        ? { playerName, description: `ouvre la porte… ${monster.name} !`, card: monster, timestamp: ts }
+        : { playerName, description: `ouvre la porte — ${revealed?.name ?? 'rien'}.`, card: revealed, timestamp: ts };
     }
-    case 'LOOT_ROOM':
-      return { playerName, description: 'pille la pièce vide.', timestamp: ts };
+    case 'LOOT_ROOM': {
+      const looted = newState.lastRevealedCard;
+      return { playerName, description: `pille la pièce : ${looted?.name ?? '?'}.`, card: looted, timestamp: ts };
+    }
     case 'LOOK_FOR_TROUBLE': {
       const monster = newState.currentMonster;
       return { playerName, description: `cherche des ennuis avec ${monster?.name ?? '?'}.`, timestamp: ts };
@@ -100,8 +132,13 @@ function buildLogEntry(
         timestamp: ts,
       };
     case 'PLAY_CARD': {
-      const card = state.players.find(p => p.id === playerId)?.hand.find(c => c.id === action.cardId);
-      return { playerName, description: `joue ${card?.name ?? 'une carte'}.`, timestamp: ts };
+      const card = state.players.find(p => p.id === playerId)?.hand.find(c => c.id === action.cardId)
+        ?? state.players.find(p => p.id === playerId)?.equipped.find(c => c.id === action.cardId);
+      const targetPlayer = action.targetId ? state.players.find(p => p.id === action.targetId) : null;
+      const desc = targetPlayer
+        ? `joue ${card?.name ?? 'une carte'} sur ${targetPlayer.name}.`
+        : `joue ${card?.name ?? 'une carte'}.`;
+      return { playerName, description: desc, card: card ?? undefined, timestamp: ts };
     }
     case 'DONATE_CARD': {
       const card = state.players.find(p => p.id === playerId)?.hand.find(c => c.id === action.cardId);
@@ -146,7 +183,7 @@ io.on('connection', (socket) => {
 
   socket.on('room:create', ({ playerName }) => {
     const name = playerName || socket.data.playerName;
-    const roomId = rooms.createRoom(playerId, name);
+    const roomId = rooms.createRoom(playerId, name, socket.data.playerGender);
     socket.join(roomId);
     socket.emit('room:created', { roomId, code: roomId });
     const state = rooms.getRoomState(roomId)!;
@@ -159,6 +196,7 @@ io.on('connection', (socket) => {
       id: playerId,
       name: playerName || socket.data.playerName,
       isHost: false,
+      gender: socket.data.playerGender,
     };
     try {
       rooms.joinRoom(roomId, player);
@@ -249,7 +287,8 @@ io.on('connection', (socket) => {
         : clientAction;
 
       if (!TurnManager.validateAction(state, playerId, action)) {
-        socket.emit('room:error', { message: 'Action invalide' });
+        const msg = buildActionErrorMessage(state, playerId, action);
+        socket.emit('game:error', { message: msg });
         return;
       }
 

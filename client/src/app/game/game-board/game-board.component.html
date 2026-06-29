@@ -11,13 +11,32 @@
       Journal
     </span>
     <div class="w-px h-3 bg-dungeon-600/50 shrink-0"></div>
-    <div class="flex gap-4 overflow-hidden min-w-0">
-      @for (entry of recentLog(); track entry.timestamp) {
-        <div class="text-xs shrink-0 last:text-gold-200/90 text-gold-800/50 transition-colors whitespace-nowrap">
-          <span class="font-heading font-semibold text-gold-600">{{ entry.playerName }}</span>
-          <span class="mx-1.5 text-dungeon-600">·</span>
-          <span>{{ entry.description }}</span>
-        </div>
+    <div class="flex gap-3 overflow-x-auto min-w-0 pb-px"
+         style="scrollbar-width: none;">
+      @for (entry of recentLog(); track entry.timestamp; let last = $last) {
+        <button type="button"
+                class="flex items-center gap-2 shrink-0 rounded-xl px-2.5 py-1
+                       transition-all duration-150 cursor-default
+                       hover:bg-dungeon-800/60 active:scale-95"
+                [class]="last ? 'cursor-pointer' : ''"
+                (click)="entry.card ? logDetailCard.set(entry.card) : null">
+          @if (entry.card?.image) {
+            <img [src]="entry.card.image" [alt]="entry.card.name"
+                 class="h-7 rounded-md border border-dungeon-600/40 shrink-0"
+                 style="aspect-ratio: 63.5/88.9; object-fit: cover;">
+          } @else if (entry.card) {
+            <div class="h-7 w-5 rounded-md border border-dungeon-600/40 shrink-0
+                        flex items-center justify-center text-[9px] text-dungeon-500
+                        bg-dungeon-800/40">◆</div>
+          }
+          <div class="whitespace-nowrap"
+               [class]="last ? 'text-gold-200/90' : 'text-gold-800/50'">
+            <span class="font-heading font-semibold"
+                  [class]="last ? 'text-gold-500' : 'text-gold-800/60'">{{ entry.playerName }}</span>
+            <span class="mx-1.5 text-dungeon-700">·</span>
+            <span class="text-xs">{{ entry.description }}</span>
+          </div>
+        </button>
       }
       @if (recentLog().length === 0) {
         <span class="text-xs text-dungeon-600 italic font-heading">L'aventure commence…</span>
@@ -149,18 +168,21 @@
 
       <!-- ── Loot: empty room ── -->
       @case ('Loot') {
-        <div class="flex flex-col items-center gap-6">
+        <div class="flex flex-col items-center gap-5 w-full max-w-xs">
+          <!-- Room icon -->
           <div class="text-center">
-            <div class="w-20 h-20 mx-auto mb-4 rounded-2xl flex items-center justify-center
+            <div class="w-16 h-16 mx-auto mb-3 rounded-2xl flex items-center justify-center
                         bg-dungeon-800/50 border border-dungeon-600/35
                         shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
-              <span class="text-4xl opacity-40 select-none">🏚</span>
+              <span class="text-3xl opacity-40 select-none">🏚</span>
             </div>
             <p class="font-heading text-sm font-semibold text-dungeon-300">Salle vide</p>
-            <p class="text-xs text-dungeon-600 mt-1">Aucun monstre dans cette pièce</p>
+            <p class="text-xs text-dungeon-600">Aucun monstre dans cette pièce</p>
           </div>
+
           @if (isMyTurn()) {
-            <div class="flex flex-col sm:flex-row gap-2.5 w-full max-w-[260px]">
+            <!-- Primary actions -->
+            <div class="flex flex-col sm:flex-row gap-2.5 w-full">
               <button (click)="lootRoom()"
                 class="mkn-btn-primary flex-1 text-sm py-2.5">
                 🎁 Piller la Pièce
@@ -173,8 +195,48 @@
                 ⏩ Passer
               </button>
             </div>
-            <p class="text-[10px] font-heading text-dungeon-600 text-center max-w-[220px]">
-              ⚔ Chercher des ennuis : jouer un Monstre depuis votre main
+
+            <!-- Chercher des ennuis — monsters from hand -->
+            @if (myHandMonsters().length > 0) {
+              <div class="w-full rounded-2xl bg-blood-950/40 border border-blood-800/30 p-3">
+                <p class="font-heading text-[9px] uppercase tracking-[0.22em] text-blood-700 mb-2.5">
+                  ⚔ Chercher des ennuis
+                </p>
+                <div class="flex flex-col gap-1.5">
+                  @for (monster of myHandMonsters(); track monster.id) {
+                    <button type="button"
+                            class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl
+                                   bg-blood-950/60 border border-blood-800/40
+                                   hover:bg-blood-900/60 hover:border-blood-700/60
+                                   transition-all active:scale-[0.98] text-left group/lft"
+                            (click)="lookForTrouble(monster.id)">
+                      @if (monster.image) {
+                        <img [src]="monster.image" [alt]="monster.name"
+                             class="h-10 rounded-lg border border-blood-900/50 shrink-0"
+                             style="aspect-ratio: 63.5/88.9; object-fit: cover;">
+                      } @else {
+                        <div class="h-10 w-7 rounded-lg border border-blood-900/50 shrink-0
+                                    bg-blood-950/60 flex items-center justify-center text-blood-700">☠</div>
+                      }
+                      <div class="flex-1 min-w-0">
+                        <p class="font-semibold text-sm text-blood-200 truncate">{{ monster.name }}</p>
+                        @if (monster.power) {
+                          <p class="font-heading text-[9px] text-blood-700">Puissance {{ monster.power }}</p>
+                        }
+                      </div>
+                      <span class="text-blood-700 group-hover/lft:text-blood-500 transition-colors text-sm">›</span>
+                    </button>
+                  }
+                </div>
+              </div>
+            } @else {
+              <p class="text-[10px] font-heading text-dungeon-700 text-center">
+                Aucun monstre en main pour chercher des ennuis
+              </p>
+            }
+          } @else {
+            <p class="font-heading text-xs text-dungeon-600 animate-pulse">
+              Le joueur actif explore la salle…
             </p>
           }
         </div>
@@ -184,13 +246,27 @@
       @case ('Charity') {
         <div class="flex flex-col items-center gap-5 max-w-xs text-center">
           @if (isMyTurn()) {
+
+            <!-- Dead player: just end the turn -->
+            @if (gs.myPlayer()?.isDead) {
+              <div class="text-4xl opacity-60 select-none">💀</div>
+              <p class="font-heading font-bold text-blood-300 text-sm">Vous êtes mort</p>
+              <p class="text-xs text-dungeon-500 leading-relaxed">
+                Votre tour est terminé. Cliquez pour passer au joueur suivant.
+              </p>
+              <button (click)="endTurn()"
+                class="mkn-btn-primary max-w-[200px] py-3 text-sm">
+                ✅ Fin de Tour
+              </button>
+            } @else {
+
             <div class="text-3xl opacity-50 select-none">🙏</div>
             <p class="font-heading font-bold text-gold-200 text-sm">Phase de Charité</p>
 
             @if (mustDonate()) {
               <div class="mkn-panel px-4 py-3 w-full">
                 <p class="text-xs text-blood-300 font-bold mb-1">
-                  {{ myHand().length }} cartes en main — maximum 5
+                  {{ myHand().length }} cartes en main — maximum {{ gs.myMaxHandSize() }}
                 </p>
 
                 @if (charityMustDiscard()) {
@@ -240,6 +316,9 @@
               class="mkn-btn-primary max-w-[200px] py-3 text-sm disabled:opacity-40 disabled:cursor-not-allowed">
               ✅ Fin de Tour
             </button>
+
+            } <!-- end @else isDead -->
+
           } @else {
             <div class="text-3xl mb-2 opacity-30 select-none">🙏</div>
             <p class="font-heading text-sm text-dungeon-500">Le joueur actif distribue ses cartes…</p>
@@ -350,6 +429,20 @@
         <p class="font-heading text-sm text-dungeon-600">En attente de la partie…</p>
       }
     }
+
+    <!-- Sell items button — visible in all non-combat phases, for any player -->
+    @if (phase() !== 'MonsterFight' && phase() !== 'FleeReaction' && phase() !== 'ForcedFlee'
+         && phase() !== 'FleeSuccessReaction' && phase() !== 'BodyPillage') {
+      <button type="button"
+              class="absolute bottom-4 right-4 flex items-center gap-2 px-3 py-2 rounded-xl
+                     font-heading text-[10px] font-bold uppercase tracking-[0.15em]
+                     bg-dungeon-800/80 border border-dungeon-600/40 text-dungeon-400
+                     hover:bg-gold-950/60 hover:border-gold-800/50 hover:text-gold-400
+                     transition-all duration-150 active:scale-95"
+              (click)="sellPanelOpen.set(true)">
+        💰 Vendre
+      </button>
+    }
   </main>
 
   <!-- ══════════════════════════════════════════════════════
@@ -366,10 +459,13 @@
     @for (player of allPlayers(); track player.id) {
 
       <!-- MOBILE: compact circle card -->
-      <div class="rounded-2xl transition-all duration-300 shrink-0 md:hidden
+      <button type="button"
+           class="rounded-2xl transition-all duration-200 shrink-0 md:hidden
                   flex flex-col items-center justify-center px-2.5 py-2
-                  min-w-[72px] w-[72px] h-[76px]"
-           [class]="player.id === currentPlayerId() ? 'player-card-active' : 'player-card-idle'">
+                  min-w-[72px] w-[72px] h-[76px] cursor-pointer
+                  hover:ring-1 hover:ring-gold-700/50 active:scale-95"
+           [class]="player.id === currentPlayerId() ? 'player-card-active' : 'player-card-idle'"
+           (click)="inspectedPlayer.set(player)">
         <div class="level-orb w-9 h-9 mb-1"
              [class]="player.id === currentPlayerId() ? 'level-orb-active' : 'level-orb-idle'"
              style="font-size: 0.85rem">
@@ -382,11 +478,15 @@
         @if (player.id === currentPlayerId()) {
           <span class="font-heading text-[7px] tracking-wider text-gold-700 uppercase mt-0.5">En jeu</span>
         }
-      </div>
+      </button>
 
       <!-- DESKTOP: full player card -->
-      <div class="hidden md:block rounded-2xl transition-all duration-300 p-3"
-           [class]="player.id === currentPlayerId() ? 'player-card-active' : 'player-card-idle'">
+      <button type="button"
+           class="hidden md:block rounded-2xl transition-all duration-200 p-3 w-full text-left
+                  cursor-pointer hover:ring-1 hover:ring-gold-700/40 active:scale-[0.98]
+                  group/player"
+           [class]="player.id === currentPlayerId() ? 'player-card-active' : 'player-card-idle'"
+           (click)="inspectedPlayer.set(player)">
 
         <!-- Name row with level orb -->
         <div class="flex items-center gap-2.5 mb-2.5">
@@ -394,7 +494,7 @@
                [class]="player.id === currentPlayerId() ? 'level-orb-active' : 'level-orb-idle'">
             {{ player.level }}
           </div>
-          <div class="min-w-0">
+          <div class="min-w-0 flex-1">
             <p class="text-sm font-semibold truncate leading-tight"
                [class]="player.id === currentPlayerId() ? 'text-gold-200' : 'text-dungeon-200'">
               {{ player.name }}
@@ -403,6 +503,10 @@
               <span class="font-heading text-[7px] tracking-[0.18em] text-gold-700 uppercase">Tour actif</span>
             }
           </div>
+          <!-- Inspect hint -->
+          <span class="text-dungeon-600 text-xs opacity-0 group-hover/player:opacity-100 transition-opacity shrink-0">
+            ›
+          </span>
         </div>
 
         <!-- Stats row -->
@@ -434,7 +538,7 @@
             </span>
           }
         </div>
-      </div>
+      </button>
     }
 
     @if (allPlayers().length === 0) {
@@ -461,4 +565,308 @@
 <!-- Combat overlay -->
 @if (inCombat()) {
   <app-combat-overlay />
+}
+
+<!-- Player inspect overlay -->
+@if (inspectedPlayer(); as p) {
+  <app-player-inspect
+    [player]="p"
+    [isMe]="p.id === gs.myPlayerId()"
+    (closed)="inspectedPlayer.set(null)" />
+}
+
+<!-- Curse target picker -->
+@if (pendingCursePlay(); as curse) {
+  <div class="fixed inset-0 z-[800] flex items-center justify-center p-4"
+       (click)="pendingCursePlay.set(null)">
+    <div class="absolute inset-0 bg-black/75 backdrop-blur-sm"></div>
+
+    <div class="relative z-10 w-full max-w-sm
+                bg-dungeon-950 border border-purple-900/50 rounded-3xl shadow-2xl
+                overflow-hidden animate-entrance"
+         (click)="$event.stopPropagation()">
+
+      <!-- Header -->
+      <div class="px-5 pt-5 pb-4 border-b border-dungeon-700/40">
+        <div class="flex items-start gap-3">
+          @if (curse.image) {
+            <img [src]="curse.image" [alt]="curse.name"
+                 class="w-12 rounded-xl border border-purple-900/60 shrink-0"
+                 style="aspect-ratio: 63.5/88.9; object-fit: cover;">
+          } @else {
+            <div class="w-12 rounded-xl border-2 border-purple-800/60 bg-purple-950/60 shrink-0
+                        flex items-center justify-center text-2xl opacity-60"
+                 style="aspect-ratio: 63.5/88.9;">⌀</div>
+          }
+          <div class="flex-1 min-w-0">
+            <p class="font-heading text-[9px] uppercase tracking-[0.18em] text-purple-700 mb-1">
+              Lancer une malédiction
+            </p>
+            <h3 class="font-bold text-purple-200 leading-snug text-sm">{{ curse.name }}</h3>
+            @if (curse.effect) {
+              <p class="text-[10px] text-dungeon-400 mt-1 leading-relaxed line-clamp-2">{{ curse.effect }}</p>
+            }
+          </div>
+          <button class="w-7 h-7 flex items-center justify-center rounded-full shrink-0
+                         bg-dungeon-700/70 text-dungeon-400 hover:text-white text-xs
+                         border border-dungeon-600/40 transition-colors"
+                  (click)="pendingCursePlay.set(null)">✕</button>
+        </div>
+      </div>
+
+      <!-- Target list -->
+      <div class="p-4 space-y-2">
+        <p class="font-heading text-[9px] uppercase tracking-[0.2em] text-dungeon-500 mb-3">
+          Choisir la cible
+        </p>
+        @for (player of allPlayers(); track player.id) {
+          @if (!player.isDead) {
+            <button type="button"
+                    class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl
+                           bg-dungeon-800/60 border border-dungeon-600/30
+                           hover:bg-purple-950/60 hover:border-purple-800/50
+                           transition-all duration-150 active:scale-[0.98] text-left
+                           group/target"
+                    (click)="castCurseOn(player.id)">
+              <!-- Level orb -->
+              <div class="w-9 h-9 rounded-full flex items-center justify-center shrink-0
+                          font-black text-sm border-2 border-dungeon-600/60
+                          bg-dungeon-800/80 text-dungeon-300
+                          group-hover/target:border-purple-700/60 group-hover/target:text-purple-200
+                          transition-colors">
+                {{ player.level }}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-semibold text-sm text-dungeon-200
+                               group-hover/target:text-purple-200 transition-colors truncate">
+                    {{ player.name }}
+                  </span>
+                  @if (player.id === gs.myPlayerId()) {
+                    <span class="font-heading text-[7px] tracking-[0.18em] uppercase
+                                 text-dungeon-600 border border-dungeon-700/50 px-1.5 py-0.5 rounded-full">
+                      VOUS
+                    </span>
+                  }
+                </div>
+                <div class="text-[10px] text-dungeon-600 font-heading mt-0.5">
+                  ⚔ {{ player.combatPower }} · 🃏 {{ player.hand.length }}
+                </div>
+              </div>
+              <span class="text-dungeon-600 group-hover/target:text-purple-500 transition-colors text-sm">›</span>
+            </button>
+          }
+        }
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Steal-level target picker -->
+@if (pendingStealLevel(); as card) {
+  <div class="fixed inset-0 z-[800] flex items-center justify-center p-4"
+       (click)="pendingStealLevel.set(null)">
+    <div class="absolute inset-0 bg-black/75 backdrop-blur-sm"></div>
+
+    <div class="relative z-10 w-full max-w-sm
+                bg-dungeon-950 border border-amber-900/50 rounded-3xl shadow-2xl
+                overflow-hidden animate-entrance"
+         (click)="$event.stopPropagation()">
+
+      <!-- Header -->
+      <div class="px-5 pt-5 pb-4 border-b border-dungeon-700/40">
+        <div class="flex items-start gap-3">
+          @if (card.image) {
+            <img [src]="card.image" [alt]="card.name"
+                 class="w-12 rounded-xl border border-amber-900/60 shrink-0"
+                 style="aspect-ratio: 63.5/88.9; object-fit: cover;">
+          } @else {
+            <div class="w-12 rounded-xl border-2 border-amber-800/60 bg-amber-950/60 shrink-0
+                        flex items-center justify-center text-2xl opacity-60"
+                 style="aspect-ratio: 63.5/88.9;">🗡</div>
+          }
+          <div class="flex-1 min-w-0">
+            <p class="font-heading text-[9px] uppercase tracking-[0.18em] text-amber-700 mb-1">
+              Vol de niveau
+            </p>
+            <h3 class="font-bold text-amber-200 leading-snug text-sm">{{ card.name }}</h3>
+            @if (card.effect) {
+              <p class="text-[10px] text-dungeon-400 mt-1 leading-relaxed line-clamp-2">{{ card.effect }}</p>
+            }
+          </div>
+          <button class="w-7 h-7 flex items-center justify-center rounded-full shrink-0
+                         bg-dungeon-700/70 text-dungeon-400 hover:text-white text-xs
+                         border border-dungeon-600/40 transition-colors"
+                  (click)="pendingStealLevel.set(null)">✕</button>
+        </div>
+      </div>
+
+      <!-- Target list -->
+      <div class="p-4 space-y-2">
+        <p class="font-heading text-[9px] uppercase tracking-[0.2em] text-dungeon-500 mb-3">
+          Voler le niveau de…
+        </p>
+        @for (player of allPlayers(); track player.id) {
+          @if (player.id !== gs.myPlayerId() && !player.isDead) {
+            <button type="button"
+                    class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl
+                           bg-dungeon-800/60 border border-dungeon-600/30
+                           hover:bg-amber-950/60 hover:border-amber-800/50
+                           transition-all duration-150 active:scale-[0.98] text-left
+                           group/target"
+                    (click)="stealLevelFrom(player.id)">
+              <div class="w-9 h-9 rounded-full flex items-center justify-center shrink-0
+                          font-black text-sm border-2 border-dungeon-600/60
+                          bg-dungeon-800/80 text-dungeon-300
+                          group-hover/target:border-amber-700/60 group-hover/target:text-amber-200
+                          transition-colors">
+                {{ player.level }}
+              </div>
+              <div class="flex-1 min-w-0">
+                <span class="font-semibold text-sm text-dungeon-200
+                             group-hover/target:text-amber-200 transition-colors truncate block">
+                  {{ player.name }}
+                </span>
+                <span class="text-[10px] text-dungeon-600 font-heading">
+                  Niveau {{ player.level }} → {{ player.level - 1 }}
+                </span>
+              </div>
+              <span class="text-dungeon-600 group-hover/target:text-amber-500 transition-colors text-sm">›</span>
+            </button>
+          }
+        }
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Revealed card banner (face-up draw, visible to all) ── -->
+@if (lastRevealedCard(); as card) {
+  <div class="fixed top-14 inset-x-0 z-[700] flex justify-center px-4 pointer-events-none">
+    <div class="pointer-events-auto flex items-center gap-4
+                bg-dungeon-950/95 border border-gold-800/40 rounded-2xl shadow-2xl
+                px-4 py-3 animate-entrance max-w-sm w-full">
+      @if (card.image) {
+        <img [src]="card.image" [alt]="card.name"
+             class="h-14 rounded-xl border border-dungeon-600/40 shrink-0"
+             style="aspect-ratio: 63.5/88.9; object-fit: cover;">
+      } @else {
+        <div class="h-14 w-10 rounded-xl border border-dungeon-600/40 bg-dungeon-800/60 shrink-0
+                    flex items-center justify-center text-dungeon-500 text-lg">◈</div>
+      }
+      <div class="flex-1 min-w-0">
+        <p class="font-heading text-[8px] uppercase tracking-[0.2em] text-gold-800/70 mb-0.5">
+          Carte tirée face visible
+        </p>
+        <p class="font-bold text-gold-200 text-sm truncate">{{ card.name }}</p>
+        @if (card.effect) {
+          <p class="text-[10px] text-dungeon-400 mt-0.5 line-clamp-1">{{ card.effect }}</p>
+        }
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Log entry card detail modal ── -->
+@if (logDetailCard(); as card) {
+  <div class="fixed inset-0 z-[850] flex items-center justify-center p-4"
+       (click)="logDetailCard.set(null)">
+    <div class="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
+    <div class="relative z-10 flex flex-col sm:flex-row max-w-lg w-full
+                bg-dungeon-900 border border-dungeon-500/50 rounded-3xl shadow-2xl
+                overflow-hidden max-h-[90dvh] animate-entrance"
+         (click)="$event.stopPropagation()">
+
+      <!-- Card visual -->
+      <div class="flex items-center justify-center shrink-0 p-5 sm:w-52
+                  bg-dungeon-950/40 border-b sm:border-b-0 sm:border-r border-dungeon-700/30">
+        @if (card.image) {
+          <img [src]="card.image" [alt]="card.name"
+               class="w-40 rounded-2xl shadow-2xl border-2 border-dungeon-600/50"
+               style="aspect-ratio: 63.5/88.9; object-fit: cover;">
+        } @else {
+          <div class="w-40 rounded-2xl border-2 border-dungeon-600/50 bg-dungeon-800/60
+                      flex flex-col items-center justify-center gap-2 p-4"
+               style="aspect-ratio: 63.5/88.9;">
+            <span class="text-4xl text-dungeon-600 select-none">◈</span>
+            <span class="text-sm font-bold text-dungeon-300 text-center">{{ card.name }}</span>
+          </div>
+        }
+      </div>
+
+      <!-- Details -->
+      <div class="flex-1 flex flex-col gap-3 p-5 overflow-y-auto">
+        <div>
+          <h2 class="text-lg font-bold text-gold-200 leading-snug">{{ card.name }}</h2>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          @if ((card.power ?? 0) > 0) {
+            <span class="font-heading text-[10px] px-2.5 py-1 rounded-full
+                         bg-amber-950/60 border border-amber-800/50 text-amber-400">
+              +{{ card.power }} puissance
+            </span>
+          }
+          @if (card.levelUp != null) {
+            <span class="font-heading text-[10px] px-2.5 py-1 rounded-full
+                         bg-green-950/60 border border-green-800/50 text-green-400">
+              +{{ card.levelUp }} niveau
+            </span>
+          }
+          @if ((card.fleeBonus ?? 0) > 0) {
+            <span class="font-heading text-[10px] px-2.5 py-1 rounded-full
+                         bg-sky-950/60 border border-sky-800/50 text-sky-400">
+              +{{ card.fleeBonus }} fuite
+            </span>
+          }
+          @if (card.isBigItem) {
+            <span class="font-heading text-[10px] px-2.5 py-1 rounded-full
+                         bg-orange-950/60 border border-orange-800/50 text-orange-400">
+              Grand objet
+            </span>
+          }
+        </div>
+        @if (card.effect) {
+          <p class="text-xs text-dungeon-300 leading-relaxed">{{ card.effect }}</p>
+        }
+        @if (card.badStuff) {
+          <div class="border-t border-dungeon-700/40 pt-3">
+            <p class="font-heading text-[9px] uppercase tracking-wider text-blood-500 mb-1.5">Châtiment</p>
+            <p class="text-xs text-red-300/80 leading-relaxed">{{ card.badStuff }}</p>
+          </div>
+        }
+        <div class="mt-auto pt-2">
+          <button class="mkn-btn-ghost w-full !py-2.5 !text-sm" (click)="logDetailCard.set(null)">
+            Fermer
+          </button>
+        </div>
+      </div>
+
+      <button class="absolute top-3 right-3 w-8 h-8 flex items-center justify-center
+                     rounded-full bg-dungeon-700/80 text-dungeon-300 hover:text-white
+                     hover:bg-dungeon-600 transition-colors text-sm z-10 border border-dungeon-600/30"
+              (click)="logDetailCard.set(null)">
+        ✕
+      </button>
+    </div>
+  </div>
+}
+
+<!-- Sell items panel -->
+@if (sellPanelOpen() && gs.myPlayer(); as me) {
+  <app-sell-items
+    [player]="me"
+    (closed)="sellPanelOpen.set(false)"
+    (sold)="sellItems($event)" />
+}
+
+<!-- ── Action error toast ── -->
+@if (actionError(); as msg) {
+  <div class="fixed bottom-[200px] inset-x-0 z-[9000] flex justify-center px-4 pointer-events-none">
+    <div class="pointer-events-auto flex items-center gap-3
+                bg-blood-950/95 border border-blood-700/60 rounded-2xl shadow-2xl
+                px-4 py-3 animate-entrance max-w-sm w-full">
+      <span class="text-blood-400 text-base shrink-0">⚠</span>
+      <span class="text-sm text-blood-200 font-heading">{{ msg }}</span>
+    </div>
+  </div>
 }

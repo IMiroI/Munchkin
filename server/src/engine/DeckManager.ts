@@ -517,15 +517,15 @@ const DOOR_CARDS: readonly Card[] = [
     effect: 'Vous devez jouer cette carte immédiatement. Tous les Prêtres gagnent immédiatement 1 niveau. Si cela permet à un joueur de terminer la partie, il est autorisé à se gausser grassement et sans pitié des autres joueurs.',
   },
   {
-    id: 'd-059', name: 'Monstre Errant', type: CardType.Special, addMonsterFromHand: true,
+    id: 'd-059', name: 'Monstre Errant', type: CardType.Special, image: '/cards/tresor_063.jpg', addMonsterFromHand: true,
     effect: 'A jouer, ainsi qu\'un monstre de votre main, quand quelqu\'un (vous y compris) se bat. Votre monstre rejoint celui qui combat : leurs forces de combat s\'additionnent. Si le ou les personnages doivent Déguerpir, résolvez séparément les tentatives, dans l\'ordre choisi par les victimes.',
   },
   {
-    id: 'd-060', name: 'Monstre Errant', type: CardType.Special, addMonsterFromHand: true,
+    id: 'd-060', name: 'Monstre Errant', type: CardType.Special, image: '/cards/tresor_063.jpg', addMonsterFromHand: true,
     effect: 'A jouer, ainsi qu\'un monstre de votre main, quand quelqu\'un (vous y compris) se bat. Votre monstre rejoint celui qui combat : leurs forces de combat s\'additionnent. Si le ou les personnages doivent Déguerpir, résolvez séparément les tentatives, dans l\'ordre choisi par les victimes.',
   },
   {
-    id: 'd-061', name: 'Monstre Errant', type: CardType.Special, addMonsterFromHand: true,
+    id: 'd-061', name: 'Monstre Errant', type: CardType.Special, image: '/cards/tresor_063.jpg', addMonsterFromHand: true,
     effect: 'A jouer, ainsi qu\'un monstre de votre main, quand quelqu\'un (vous y compris) se bat. Votre monstre rejoint celui qui combat : leurs forces de combat s\'additionnent. Si le ou les personnages doivent Déguerpir, résolvez séparément les tentatives, dans l\'ordre choisi par les victimes.',
   },
   {
@@ -831,7 +831,7 @@ const TREASURE_CARDS: readonly Card[] = [
     effect: 'Annule n\'importe quelle Malédiction. Peut être joué n\'importe quand. Usage unique.',
   },
   {
-    id: 't-003', name: 'Anneau de Souhait', type: CardType.Treasure,
+    id: 't-003', name: 'Anneau de Souhait', type: CardType.Treasure, image: '/cards/tresor_002.jpg',
     isOneShot: true, cancelsCurse: true, goldValue: 500,
     effect: 'Annule n\'importe quelle malédiction, à tout moment. Usage unique.',
   },
@@ -952,7 +952,7 @@ const TREASURE_CARDS: readonly Card[] = [
     effect: 'A jouer pendant n\'importe quel combat. Un autre joueur de votre choix combat le ou les monstres. Il peut demander de l\'aide normalement. et obtient le trésor et les niveaux s\'il l\'emporte. Le joueur qui combattait à l\'origine reprend alors son tour, et peut piller la pièce, que le combat ait été remporté ou perdu. Usage unique.',
   },
   {
-    id: 't-063', name: 'Potion Glaciale Explosive', type: CardType.Treasure, image: '/cards/tresor_063.jpg',
+    id: 't-063', name: 'Potion Glaciale Explosive', type: CardType.Treasure, image: '',
     power: 3, isOneShot: true, goldValue: 100,
     effect: '+3 en combat pour le camp de votre choix. Usage unique.',
 

@@ -12,7 +12,8 @@ export class GameService {
   // ---------------------------------------------------------------------------
 
   readonly gameState = signal<GameState | null>(null);
-  readonly actionLog = signal<ActionLogEntry[]>([]);
+  readonly actionLog  = signal<ActionLogEntry[]>([]);
+  readonly lastError  = signal<string | null>(null);
 
   /** Current user's player ID — read from the JWT sub claim at boot. */
   readonly myPlayerId = signal<string>(this.readPlayerIdFromJwt());
@@ -60,8 +61,17 @@ export class GameService {
 
   readonly myTotalPower = computed(() => this.myPlayer()?.combatPower ?? 0);
 
+  /** Maximum cards the player may hold at end of turn (5 + race bonus) */
+  readonly myMaxHandSize = computed(() => {
+    const bonus = this.myEquipped().reduce((sum, c) => sum + (c.raceHandSizeBonus ?? 0), 0);
+    return 5 + bonus;
+  });
+
   /** Last 5 log entries, newest last. */
   readonly recentLog = computed(() => this.actionLog().slice(-5));
+
+  /** Card drawn face-up from the door deck (visible to all) */
+  readonly lastRevealedCard = computed(() => this.gameState()?.lastRevealedCard ?? null);
 
   // ---------------------------------------------------------------------------
   // Socket subscriptions
@@ -80,7 +90,14 @@ export class GameService {
         this.actionLog.update(log => [...log.slice(-99), entry]),
       );
 
-    destroyRef.onDestroy(() => { s1.unsubscribe(); s2.unsubscribe(); });
+    const s3 = this.socket
+      .on('game:error')
+      .subscribe(err => {
+        this.lastError.set(err.message);
+        setTimeout(() => this.lastError.set(null), 4000);
+      });
+
+    destroyRef.onDestroy(() => { s1.unsubscribe(); s2.unsubscribe(); s3.unsubscribe(); });
   }
 
   // ---------------------------------------------------------------------------

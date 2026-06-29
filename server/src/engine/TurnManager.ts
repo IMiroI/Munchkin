@@ -293,7 +293,7 @@ function enterBodyPillage(
 function startNextTurn(state: GameState): GameState {
   const nextId = nextPlayerId(state);
   const nextPlayer = state.players.find(p => p.id === nextId)!;
-  const base: GameState = { ...state, phase: GamePhase.KickDown, currentPlayerId: nextId, currentMonster: undefined };
+  const base: GameState = { ...state, phase: GamePhase.KickDown, currentPlayerId: nextId, currentMonster: undefined, lastRevealedCard: undefined };
 
   if (!nextPlayer.isDead) return base;
 
@@ -942,6 +942,17 @@ export const TurnManager = {
           return target != null && target.id !== playerId;
         }
 
+        // DoorCurse played from hand on an explicit target — any player, open phases only
+        if (card.type === CardType.DoorCurse && action.targetId) {
+          const openPhases = new Set([
+            GamePhase.KickDown, GamePhase.MonsterFight, GamePhase.Loot,
+            GamePhase.Charity, GamePhase.EndTurn,
+          ]);
+          if (!openPhases.has(state.phase)) return false;
+          const target = state.players.find(p => p.id === action.targetId);
+          return target != null && !target.isDead;
+        }
+
         // All other cards: active player or intervention during combat, in a valid play phase
         const validPhase =
           state.phase === GamePhase.KickDown ||
@@ -1030,9 +1041,9 @@ export const TurnManager = {
           return { ...base, phase: GamePhase.CurseReaction, pendingCurse: card };
         }
 
-        // Class / Race / Special / MonsterBooster go to active player's hand
+        // Class / Race / Special / MonsterBooster go to active player's hand, revealed to all
         const updatedPlayer = { ...activePlayer, hand: [...activePlayer.hand, card] };
-        return { ...updatePlayer(base, updatedPlayer), phase: GamePhase.Loot };
+        return { ...updatePlayer(base, updatedPlayer), phase: GamePhase.Loot, lastRevealedCard: card };
       }
 
       // ---------------------------------------------------------------
@@ -1042,6 +1053,7 @@ export const TurnManager = {
         const updatedPlayer = { ...activePlayer, hand: [...activePlayer.hand, ...cards] };
         return {
           ...updatePlayer(state, updatedPlayer),
+          lastRevealedCard: cards[0],
           phase: GamePhase.Charity,
           doorDeck: deck,
           discardDoor: discard,

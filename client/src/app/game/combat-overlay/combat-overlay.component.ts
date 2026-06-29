@@ -28,6 +28,10 @@ export class CombatOverlayComponent implements OnInit, OnDestroy {
   protected readonly myPower      = this.gs.myTotalPower;
   protected readonly monsterPower = this.gs.monsterPower;
   protected readonly isMyTurn     = this.gs.isMyTurn;
+  protected readonly phase        = this.gs.phase;
+
+  protected readonly isFleeReaction        = computed(() => this.phase() === GamePhase.FleeReaction);
+  protected readonly isFleeSuccessReaction = computed(() => this.phase() === GamePhase.FleeSuccessReaction);
 
   protected readonly playerWins = computed(() => this.myPower() > this.monsterPower());
   protected readonly powerDiff  = computed(() => this.myPower() - this.monsterPower());
@@ -59,7 +63,7 @@ export class CombatOverlayComponent implements OnInit, OnDestroy {
   protected readonly acceptedHelperPower = computed(() =>
     this.acceptedHelpers()
       .map(h => this.gs.allPlayers().find(p => p.id === h.id))
-      .reduce((sum, p) => sum + (p?.level ?? 0), 0),
+      .reduce((sum, p) => sum + (p?.combatPower ?? 0), 0),
   );
 
   protected readonly totalPowerWithHelpers = computed(
@@ -161,6 +165,18 @@ export class CombatOverlayComponent implements OnInit, OnDestroy {
     const gameId = this.gs.gameState()?.id;
     if (!gameId) return;
     this.gs.sendAction(gameId, { type: 'RUN_AWAY' });
+  }
+
+  protected resolveFlee(): void {
+    const gameId = this.gs.gameState()?.id;
+    if (!gameId) return;
+    this.gs.sendAction(gameId, { type: 'RESOLVE_FLEE' });
+  }
+
+  protected resolveFleeSuccess(): void {
+    const gameId = this.gs.gameState()?.id;
+    if (!gameId) return;
+    this.gs.sendAction(gameId, { type: 'RESOLVE_FLEE_SUCCESS' });
   }
 
   // ── Timer helpers ──────────────────────────────────────────────────────────

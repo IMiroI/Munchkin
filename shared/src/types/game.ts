@@ -97,4 +97,6 @@ export interface GameState {
   pendingFleeMonsters?: Card[];
   /** During CurseItemChoice triggered by a manually played curse: the ID of the player being cursed */
   pendingCurseTarget?: string;
+  /** Card drawn from the door deck face-up (non-monster, non-curse) — visible to all players */
+  lastRevealedCard?: Card;
 }

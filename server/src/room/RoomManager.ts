@@ -16,13 +16,13 @@ export class RoomManager {
     return RoomManager.instance;
   }
 
-  createRoom(hostId: string, hostName: string): string {
+  createRoom(hostId: string, hostName: string, hostGender: 'male' | 'female' = 'male'): string {
     const code = this.generateCode();
     const room: RoomState = {
       id: code,
       code,
       hostId,
-      players: [{ id: hostId, name: hostName, isHost: true }],
+      players: [{ id: hostId, name: hostName, isHost: true, gender: hostGender }],
       status: 'waiting',
     };
     this.rooms.set(code, room);

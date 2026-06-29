@@ -36,7 +36,7 @@ function classBonus(player: Player): number {
 }
 
 function helperBonus(helpers: Player[]): number {
-  return helpers.reduce((sum, h) => sum + h.level, 0);
+  return helpers.reduce((sum, h) => sum + h.combatPower, 0);
 }
 
 function bonusItemsTotal(items: Card[]): number {

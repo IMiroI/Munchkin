@@ -1,14 +1,17 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import type { Card, Player } from '@munchkin/shared';
 import { CardType, GamePhase } from '@munchkin/shared';
 import { GameService } from '../../services/game.service';
 import { HandComponent } from '../hand/hand.component';
 import { CombatOverlayComponent } from '../combat-overlay/combat-overlay.component';
+import { PlayerInspectComponent } from '../player-inspect/player-inspect.component';
+import { SellItemsComponent } from '../sell-items/sell-items.component';
 
 @Component({
   selector: 'app-game-board',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HandComponent, CombatOverlayComponent],
+  imports: [HandComponent, CombatOverlayComponent, PlayerInspectComponent, SellItemsComponent],
   templateUrl: './game-board.component.html',
   host: { style: 'display:block;min-height:100dvh;' },
 })
@@ -31,12 +34,42 @@ export class GameBoardComponent {
   /** Charity: when multiple players are tied for lowest, the active player picks a target per card */
   protected readonly selectedCharityTargetId = signal<string | null>(null);
 
-  protected readonly inCombat = computed(
-    () => this.phase() === GamePhase.MonsterFight,
+  /** Player whose equipment panel is open (null = closed) */
+  protected readonly inspectedPlayer = signal<Player | null>(null);
+
+  /** Curse card the player wants to play — waiting for a target selection */
+  protected readonly pendingCursePlay = signal<Card | null>(null);
+
+  /** Steal-level card waiting for a target selection */
+  protected readonly pendingStealLevel = signal<Card | null>(null);
+
+  /** Card from log history the player is previewing */
+  protected readonly logDetailCard = signal<Card | null>(null);
+
+  /** Revealed card from door deck (face-up for all to see) */
+  protected readonly lastRevealedCard = this.gs.lastRevealedCard;
+
+  /** Error message from the last invalid action */
+  protected readonly actionError = this.gs.lastError;
+
+  /** Whether the sell-items panel is open */
+  protected readonly sellPanelOpen = signal(false);
+
+  /** Monster cards in my hand that I can play to look for trouble */
+  protected readonly myHandMonsters = computed(() =>
+    this.myHand().filter(c => c.type === CardType.Monster),
   );
 
-  /** True when the active player still holds more than 5 cards and must donate/discard before ending. */
-  protected readonly mustDonate = computed(() => this.myHand().length > 5);
+  protected readonly inCombat = computed(() => {
+    const p = this.phase();
+    return p === GamePhase.MonsterFight
+        || p === GamePhase.FleeReaction
+        || p === GamePhase.FleeSuccessReaction
+        || p === GamePhase.ForcedFlee;
+  });
+
+  /** True when the active player still holds more than the allowed hand size. */
+  protected readonly mustDonate = computed(() => this.myHand().length > this.gs.myMaxHandSize());
 
   protected readonly phaseLabel = computed(() => {
     switch (this.phase()) {
@@ -93,10 +126,28 @@ export class GameBoardComponent {
 
   protected onCardPlayed(cardId: string): void {
     const phase = this.phase();
+    const card = this.myHand().find(c => c.id === cardId);
 
     if (phase === GamePhase.Charity) {
+      // Curses always need a target, even during charity
+      if (card?.type === CardType.DoorCurse) {
+        this.pendingCursePlay.set(card);
+        return;
+      }
+      // Cards with an immediate play effect (level-up, class, race, equippable items)
+      // must be played, not donated — even when mustDonate() is true
+      const isImmediatePlay =
+        card != null && (
+          card.levelUp != null ||
+          card.levelUpAllByClass != null ||
+          card.type === CardType.Class ||
+          card.type === CardType.Race
+        );
+      if (isImmediatePlay) {
+        this.action({ type: 'PLAY_CARD', cardId });
+        return;
+      }
       if (this.mustDonate()) {
-        // Still over 5 cards: this click is a donate/discard
         if (this.charityMustDiscard()) {
           const myId = this.gs.myPlayerId();
           this.action({ type: 'DONATE_CARD', cardId, targetPlayerId: myId });
@@ -112,21 +163,44 @@ export class GameBoardComponent {
           this.action({ type: 'DONATE_CARD', cardId, targetPlayerId });
           return;
         }
-        // Multiple targets but none selected — UI shows picker, do nothing
         return;
       }
-      // At ≤5 cards: player can play cards normally (equip items, play curses…)
       this.action({ type: 'PLAY_CARD', cardId });
       return;
     }
 
-    // In Loot phase a Monster card means "look for trouble", not a regular play
-    const card = this.myHand().find(c => c.id === cardId);
+    // DoorCurse from hand: pick a target before sending
+    if (card?.type === CardType.DoorCurse) {
+      this.pendingCursePlay.set(card);
+      return;
+    }
+
+    // Steal-level card: pick a target before sending
+    if (card?.stealLevel) {
+      this.pendingStealLevel.set(card);
+      return;
+    }
+
+    // In Loot phase a Monster card means "look for trouble"
     if (card?.type === CardType.Monster && phase === GamePhase.Loot) {
       this.action({ type: 'LOOK_FOR_TROUBLE', monsterId: cardId });
     } else {
       this.action({ type: 'PLAY_CARD', cardId });
     }
+  }
+
+  protected castCurseOn(targetPlayerId: string): void {
+    const curse = this.pendingCursePlay();
+    if (!curse) return;
+    this.pendingCursePlay.set(null);
+    this.action({ type: 'PLAY_CARD', cardId: curse.id, targetId: targetPlayerId });
+  }
+
+  protected stealLevelFrom(targetPlayerId: string): void {
+    const card = this.pendingStealLevel();
+    if (!card) return;
+    this.pendingStealLevel.set(null);
+    this.action({ type: 'PLAY_CARD', cardId: card.id, targetId: targetPlayerId });
   }
 
   protected onCardEquipped(cardId: string): void {
@@ -137,8 +211,17 @@ export class GameBoardComponent {
     this.action({ type: 'PICK_BODY_LOOT', cardId });
   }
 
+  protected lookForTrouble(monsterId: string): void {
+    this.action({ type: 'LOOK_FOR_TROUBLE', monsterId });
+  }
+
   protected giveItem(itemId: string, targetPlayerId: string): void {
     this.action({ type: 'GIVE_ITEM', itemId, targetPlayerId });
+  }
+
+  protected sellItems(payload: { cardIds: string[]; doubleCardId?: string }): void {
+    this.sellPanelOpen.set(false);
+    this.action({ type: 'SELL_ITEMS', cardIds: payload.cardIds, doubleCardId: payload.doubleCardId });
   }
 
   private action(a: Parameters<GameService['sendAction']>[1]): void {
