@@ -1,5 +1,7 @@
 # Munchkin — Serveur de jeu multijoueur
 
+> Cette application fait partie de la suite **VGAMES**. Elle est accessible depuis le portail [VGAMES](http://localhost:3000) (`/games`) et tourne sur le port `3002`. L'utilisateur connecté sur VGAMES n'a pas besoin de se reconnecter — l'intégration SSO est prévue dans une prochaine version (actuellement, Munchkin utilise sa propre authentification invité).
+
 Implémentation en ligne du jeu de cartes **Munchkin** (base, 168 cartes) sous forme de monorepo TypeScript.  
 Architecture client/serveur temps réel : pas d'appels HTTP pendant la partie, uniquement Socket.io.
 
@@ -207,7 +209,7 @@ Le fichier `server/.env` est pré-rempli pour Docker Compose :
 DATABASE_URL="postgresql://munchkin:munchkin@localhost:5432/munchkin"
 REDIS_URL="redis://localhost:6379"
 NODE_ENV="development"
-PORT=3000
+PORT=3002
 JWT_SECRET="dev-secret-change-in-prod"
 ```
 

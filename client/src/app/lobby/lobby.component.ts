@@ -13,7 +13,7 @@ import type { RoomState } from '@munchkin/shared';
 import { SocketService } from '../services/socket.service';
 import { GameService } from '../services/game.service';
 
-const SERVER_URL = 'http://localhost:3000';
+const SERVER_URL = `http://${window.location.hostname}:3001`;
 
 @Component({
   selector: 'app-lobby',

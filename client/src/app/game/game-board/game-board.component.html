@@ -21,7 +21,7 @@
                 [class]="last ? 'cursor-pointer' : ''"
                 (click)="entry.card ? logDetailCard.set(entry.card) : null">
           @if (entry.card?.image) {
-            <img [src]="entry.card.image" [alt]="entry.card.name"
+            <img [src]="entry.card!.image" [alt]="entry.card!.name"
                  class="h-7 rounded-md border border-dungeon-600/40 shrink-0"
                  style="aspect-ratio: 63.5/88.9; object-fit: cover;">
           } @else if (entry.card) {

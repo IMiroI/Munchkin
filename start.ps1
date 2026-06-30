@@ -1,4 +1,4 @@
-# Munchkin — Script de démarrage local
+﻿# Munchkin â€” Script de dÃ©marrage local
 # Usage : double-cliquer sur start.bat, ou : pwsh -File start.ps1
 
 $root = $PSScriptRoot
@@ -23,7 +23,7 @@ Write-Host "==========================================" -ForegroundColor Magenta
 Write-Host "   Munchkin - Demarrage local"             -ForegroundColor Magenta
 Write-Host "==========================================" -ForegroundColor Magenta
 
-# ── 1. Docker ─────────────────────────────────────────────────────────────────
+# â”€â”€ 1. Docker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 Write-Banner "[1/4] Infrastructure Docker (Redis + PostgreSQL)"
 
 docker info > $null 2>&1
@@ -50,7 +50,7 @@ $pgHealth = docker inspect munchkin-postgres --format "{{.State.Health.Status}}"
 $rdHealth = docker inspect munchkin-redis    --format "{{.State.Health.Status}}" 2>$null
 Write-Host "  postgres=$pgHealth  redis=$rdHealth" -ForegroundColor $(if ($pgHealth -eq "healthy" -and $rdHealth -eq "healthy") { "Green" } else { "Yellow" })
 
-# ── 2. Dépendances ────────────────────────────────────────────────────────────
+# â”€â”€ 2. DÃ©pendances â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 Write-Banner "[2/4] Dependances npm"
 
 $needInstall = -not (Test-Path "$root\server\node_modules")
@@ -82,7 +82,7 @@ if (-not (Test-Path "$root\shared\dist\index.js")) {
     Write-Host "  [OK] Shared deja compile" -ForegroundColor Green
 }
 
-# ── 3. Base de données ────────────────────────────────────────────────────────
+# â”€â”€ 3. Base de donnÃ©es â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 Write-Banner "[3/4] Base de donnees"
 
 $setupFlag = "$root\.munchkin-setup"
@@ -113,7 +113,7 @@ if (-not (Test-Path $setupFlag)) {
     Write-Host "  (supprimez .munchkin-setup pour forcer une re-initialisation)" -ForegroundColor DarkGray
 }
 
-# ── 4. Lancement ──────────────────────────────────────────────────────────────
+# â”€â”€ 4. Lancement â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 Write-Banner "[4/4] Lancement serveur + client"
 
 $serverCmd = "& { `$host.UI.RawUI.WindowTitle = 'Munchkin - Serveur'; Set-Location '$root\server'; npm run dev }"
@@ -126,8 +126,10 @@ Start-Process powershell -ArgumentList "-NoExit", "-NoProfile", "-Command", $cli
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Green
 Write-Host "  Munchkin lance !"                        -ForegroundColor Green
-Write-Host "  Serveur -> http://localhost:3000"        -ForegroundColor Green
-Write-Host "  Client  -> http://localhost:4200"        -ForegroundColor Green
+Write-Host "  Serveur -> http://localhost:3001"        -ForegroundColor Green
+Write-Host "  Client  -> http://localhost:3002"        -ForegroundColor Green
 Write-Host "==========================================" -ForegroundColor Green
 Write-Host ""
 Read-Host "Appuyez sur Entree pour fermer cette fenetre"
+
+

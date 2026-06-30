@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { app } from './app.js';
@@ -26,7 +27,7 @@ interface SocketData {
 
 const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(httpServer, {
   cors: {
-    origin: 'http://localhost:4200',
+    origin: ['http://localhost:3002', 'http://192.168.1.109:3002'],
     methods: ['GET', 'POST'],
   },
 });

@@ -7,7 +7,7 @@ import type {
   RoomState,
 } from '@munchkin/shared';
 
-const SERVER_URL = 'http://localhost:3000';
+const SERVER_URL = `http://${window.location.hostname}:3001`;
 
 @Injectable({ providedIn: 'root' })
 export class SocketService implements OnDestroy {

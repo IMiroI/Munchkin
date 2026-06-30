@@ -4,7 +4,7 @@ import { createHmac, randomUUID } from 'crypto';
 
 export const app = express();
 
-app.use(cors({ origin: 'http://localhost:4200' }));
+app.use(cors({ origin: ['http://localhost:3002', 'http://192.168.1.109:3002'] }));
 app.use(express.json());
 
 app.get('/health', (_req, res) => {

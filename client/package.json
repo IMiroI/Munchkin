@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "ng serve --port 4200",
+    "dev": "ng serve --port 3002 --host 0.0.0.0",
     "build": "ng build",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
