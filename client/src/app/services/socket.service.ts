@@ -7,15 +7,13 @@ import type {
   RoomState,
 } from '@munchkin/shared';
 
-const SERVER_URL = `http://${window.location.hostname}:3001`;
-
 @Injectable({ providedIn: 'root' })
 export class SocketService implements OnDestroy {
   private socket: Socket<ServerToClientEvents, ClientToServerEvents>;
 
   constructor() {
-    this.socket = io(SERVER_URL, {
-      auth: { token: sessionStorage.getItem('jwt') ?? undefined },
+    this.socket = io({
+      withCredentials: true,
       autoConnect: true,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     }) as any;
@@ -77,9 +75,7 @@ export class SocketService implements OnDestroy {
     return this.on('game:started');
   }
 
-  /** Reconnect with the current JWT from sessionStorage (call after auth). */
   reconnect(): void {
-    this.socket.auth = { token: sessionStorage.getItem('jwt') ?? undefined };
     this.socket.disconnect();
     this.socket.connect();
   }

@@ -1,7 +1,9 @@
 import 'dotenv/config';
 import { createServer } from 'http';
+import { createHmac } from 'crypto';
 import { Server } from 'socket.io';
 import { app } from './app.js';
+import { JWT_SECRET } from './config.js';
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
@@ -25,10 +27,13 @@ interface SocketData {
   playerGender: 'male' | 'female';
 }
 
+const CORS_ORIGINS = (process.env['CORS_ORIGINS'] || 'http://localhost:4200,http://localhost:3002').split(',');
+
 const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(httpServer, {
   cors: {
-    origin: ['http://localhost:3002', 'http://192.168.1.109:3002'],
+    origin: CORS_ORIGINS,
     methods: ['GET', 'POST'],
+    credentials: true,
   },
 });
 
@@ -38,21 +43,56 @@ const rooms = RoomManager.getInstance();
 const playerSockets = new Map<string, string>();
 
 io.use((socket, next) => {
-  const token = socket.handshake.auth['token'] as string | undefined;
-  if (token) {
-    try {
-      const payload = JSON.parse(
-        Buffer.from(token.split('.')[1]!, 'base64url').toString('utf-8')
-      ) as { sub?: string; name?: string; gender?: string };
-      socket.data.playerId = payload.sub ?? socket.id;
-      socket.data.playerName = payload.name ?? 'Player';
-      socket.data.playerGender = payload.gender === 'female' ? 'female' : 'male';
-    } catch {
+  const cookieHeader = socket.handshake.headers.cookie || '';
+  const cookies: Record<string, string> = {};
+  cookieHeader.split(';').forEach(c => {
+    const [k, ...v] = c.trim().split('=');
+    if (k) cookies[k.trim()] = decodeURIComponent(v.join('='));
+  });
+  const token = cookies['jwt'] || (socket.handshake.auth['token'] as string | undefined);
+  if (!token) {
+    socket.data.playerId = socket.id;
+    socket.data.playerName = 'Player';
+    socket.data.playerGender = 'male';
+    return next();
+  }
+
+  const parts = token.split('.');
+  if (parts.length !== 3) {
+    socket.data.playerId = socket.id;
+    socket.data.playerName = 'Player';
+    socket.data.playerGender = 'male';
+    return next();
+  }
+
+  const [header, body, providedSig] = parts as [string, string, string];
+  const expectedSig = createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
+
+  if (providedSig !== expectedSig) {
+    // Signature invalide — connexion anonyme
+    socket.data.playerId = socket.id;
+    socket.data.playerName = 'Player';
+    socket.data.playerGender = 'male';
+    return next();
+  }
+
+  try {
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf-8')) as {
+      sub?: string; name?: string; gender?: string; exp?: number; iat?: number;
+    };
+
+    // Vérifier l'expiration
+    if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
       socket.data.playerId = socket.id;
-      socket.data.playerName = 'Player';
+      socket.data.playerName = 'Expired';
       socket.data.playerGender = 'male';
+      return next();
     }
-  } else {
+
+    socket.data.playerId = payload.sub ?? socket.id;
+    socket.data.playerName = (payload.name ?? 'Player').slice(0, 50);
+    socket.data.playerGender = payload.gender === 'female' ? 'female' : 'male';
+  } catch {
     socket.data.playerId = socket.id;
     socket.data.playerName = 'Player';
     socket.data.playerGender = 'male';
@@ -278,6 +318,13 @@ io.on('connection', (socket) => {
       const state = await GameRepository.loadState(gameId);
       if (!state) {
         socket.emit('room:error', { message: 'Partie introuvable' });
+        return;
+      }
+
+      // Vérifier que le joueur est bien membre de la partie
+      const isMember = state.players.some((p: GameState['players'][number]) => p.id === playerId);
+      if (!isMember) {
+        socket.emit('room:error', { message: "Vous n'êtes pas dans cette partie" });
         return;
       }
 

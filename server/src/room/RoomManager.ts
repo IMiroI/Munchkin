@@ -1,7 +1,8 @@
 import type { RoomPlayer, RoomState } from '@munchkin/shared';
+import { randomBytes } from 'crypto';
 
 const MAX_PLAYERS = 6;
-const CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export class RoomManager {
   private static instance: RoomManager;
@@ -77,10 +78,8 @@ export class RoomManager {
   private generateCode(): string {
     let code: string;
     do {
-      code = Array.from(
-        { length: 6 },
-        () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]
-      ).join('');
+      const buf = randomBytes(6);
+      code = Array.from(buf).map(b => CODE_CHARS[b % CODE_CHARS.length]).join('');
     } while (this.rooms.has(code));
     return code;
   }

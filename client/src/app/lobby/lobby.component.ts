@@ -13,8 +13,6 @@ import type { RoomState } from '@munchkin/shared';
 import { SocketService } from '../services/socket.service';
 import { GameService } from '../services/game.service';
 
-const SERVER_URL = `http://${window.location.hostname}:3001`;
-
 @Component({
   selector: 'app-lobby',
   standalone: true,
@@ -49,16 +47,16 @@ export class LobbyComponent implements OnInit {
   );
 
   ngOnInit(): void {
-    const jwt = sessionStorage.getItem('jwt');
-    if (jwt) {
-      try {
-        const payload = JSON.parse(atob(jwt.split('.')[1]!)) as { sub?: string; name?: string };
-        if (payload.sub) {
-          this.playerName.set(payload.name ?? '');
+    fetch('/auth/me', { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : null))
+      .then((data: { playerId?: string; name?: string } | null) => {
+        if (data?.playerId) {
+          this.gameService.setMyPlayerId(data.playerId);
+          this.playerName.set(data.name ?? '');
           this.step.set('lobby');
         }
-      } catch { /* bad JWT — stay on auth */ }
-    }
+      })
+      .catch(() => { /* non authentifié, rester sur l'écran d'auth */ });
 
     const s1 = this.socket.on('room:updated').subscribe(state => {
       this.roomState.set(state);
@@ -92,14 +90,15 @@ export class LobbyComponent implements OnInit {
     this.isLoading.set(true);
     this.error.set('');
     try {
-      const resp = await fetch(`${SERVER_URL}/auth/guest`, {
+      const resp = await fetch('/auth/guest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ name, gender: this.genderInput() }),
       });
       if (!resp.ok) throw new Error('Server error');
-      const data = await resp.json() as { jwt: string; playerId: string; name: string; gender: 'male' | 'female' };
-      sessionStorage.setItem('jwt', data.jwt);
+      const data = await resp.json() as { playerId: string; name: string; gender: 'male' | 'female' };
+      // Pas de sessionStorage — le cookie httpOnly est défini automatiquement par le serveur
       this.gameService.setMyPlayerId(data.playerId);
       this.playerName.set(data.name);
       this.socket.reconnect();
