@@ -16,7 +16,7 @@
       @for (entry of recentLog(); track entry.timestamp; let last = $last) {
         <button type="button"
                 class="flex items-center gap-2 shrink-0 rounded-xl px-2.5 py-1
-                       transition-all duration-150 cursor-default
+                       transition-all duration-150 cursor-default animate-log-entry
                        hover:bg-dungeon-800/60 active:scale-95"
                 [class]="last ? 'cursor-pointer' : ''"
                 (click)="entry.card ? logDetailCard.set(entry.card) : null">
@@ -425,6 +425,148 @@
         </div>
       }
 
+      <!-- ── TreasureShare: distribute combat loot between winner and helpers ── -->
+      @case ('TreasureShare') {
+        <div class="flex flex-col w-full max-w-sm gap-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xl opacity-60 select-none">💰</span>
+            <p class="font-heading font-bold text-gold-200 text-sm">Distribution des Trésors</p>
+          </div>
+
+          @if (isMyTurn()) {
+            <!-- Winner: assign each treasure card (scrollable list) -->
+            <p class="text-[10px] text-dungeon-400 leading-relaxed">
+              Cliquez sur une carte pour les détails. Choisissez qui reçoit chaque trésor.
+            </p>
+
+            <div class="flex flex-col gap-2 overflow-y-auto" style="max-height: 45dvh;">
+              @for (card of pendingShareTreasures(); track card.id) {
+                <div class="flex items-center gap-3 bg-dungeon-900/70 border border-dungeon-600/30
+                            rounded-2xl px-3 py-2.5">
+                  <!-- Card thumbnail — clickable for details -->
+                  <button type="button" (click)="sharePreviewCard.set(card)"
+                    class="shrink-0 rounded-xl overflow-hidden border border-dungeon-600/50
+                           hover:border-gold-700/60 transition-all duration-150 active:scale-95"
+                    style="height: 72px; aspect-ratio: 63.5/88.9;">
+                    @if (card.image) {
+                      <img [src]="card.image" [alt]="card.name" class="w-full h-full object-cover">
+                    } @else {
+                      <div class="w-full h-full bg-dungeon-800/60 flex items-center justify-center text-dungeon-500 text-xl">💰</div>
+                    }
+                  </button>
+                  <!-- Card info -->
+                  <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-xs text-dungeon-200 truncate">{{ card.name }}</p>
+                    @if ((card.power ?? 0) > 0) {
+                      <p class="font-heading text-[9px] text-gold-700">+{{ card.power }}</p>
+                    }
+                  </div>
+                  <!-- Assign buttons -->
+                  <div class="flex flex-col gap-1 shrink-0">
+                    <button (click)="assignTreasure(card.id, gs.myPlayerId())"
+                      class="px-2 py-1 rounded-lg text-[9px] font-heading font-bold transition-all
+                             active:scale-95"
+                      [class]="(treasureAssignments().get(card.id) ?? gs.myPlayerId()) === gs.myPlayerId()
+                        ? 'bg-gold-800/70 border border-gold-600/60 text-gold-200'
+                        : 'bg-dungeon-800/60 border border-dungeon-600/40 text-dungeon-400 hover:bg-dungeon-700/60'">
+                      Moi
+                    </button>
+                    @for (h of shareHelpers(); track h.id) {
+                      <button (click)="assignTreasure(card.id, h.id)"
+                        class="px-2 py-1 rounded-lg text-[9px] font-heading font-bold transition-all
+                               active:scale-95"
+                        [class]="treasureAssignments().get(card.id) === h.id
+                          ? 'bg-ocean-800/70 border border-ocean-600/60 text-ocean-200'
+                          : 'bg-dungeon-800/60 border border-dungeon-600/40 text-dungeon-400 hover:bg-dungeon-700/60'">
+                        {{ h.name }}
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+
+            <!-- Confirm button pinned below scroll area -->
+            <button (click)="confirmShare()"
+              class="mkn-btn-primary w-full py-2.5 text-sm shrink-0">
+              ✅ Confirmer la distribution
+            </button>
+
+          } @else if (canSeeTreasures()) {
+            <!-- Helper: see the cards, read-only + clickable for details -->
+            <p class="text-[10px] text-ocean-400 leading-relaxed">
+              Vous avez aidé au combat. Le vainqueur distribue les trésors…
+            </p>
+            <div class="flex flex-wrap gap-2">
+              @for (card of pendingShareTreasures(); track card.id) {
+                <button type="button" (click)="sharePreviewCard.set(card)"
+                  class="flex flex-col items-center gap-1 rounded-xl overflow-hidden border border-dungeon-600/40
+                         hover:border-gold-700/60 transition-all duration-150 active:scale-95">
+                  @if (card.image) {
+                    <img [src]="card.image" [alt]="card.name"
+                         class="rounded-xl border-0"
+                         style="height: 72px; aspect-ratio: 63.5/88.9; object-fit: cover;">
+                  } @else {
+                    <div class="bg-dungeon-800/60 flex items-center justify-center text-dungeon-500 text-xl rounded-xl"
+                         style="height: 72px; aspect-ratio: 63.5/88.9;">💰</div>
+                  }
+                  <p class="font-heading text-[8px] text-dungeon-500 text-center w-12 truncate pb-1 px-1">{{ card.name }}</p>
+                </button>
+              }
+            </div>
+            <p class="text-[10px] text-dungeon-600 italic font-heading animate-pulse">
+              En attente du vainqueur…
+            </p>
+
+          } @else {
+            <!-- Other players: no card details -->
+            <p class="font-heading text-xs text-dungeon-500 animate-pulse">
+              Distribution des trésors de combat en cours…
+            </p>
+          }
+        </div>
+
+        <!-- TreasureShare card detail lightbox -->
+        @if (sharePreviewCard(); as card) {
+          <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+               (click)="sharePreviewCard.set(null)">
+            <div class="absolute inset-0 bg-black/85 backdrop-blur-md"></div>
+            <div class="relative z-10 flex flex-col sm:flex-row gap-0 max-w-xs w-full
+                        bg-dungeon-900 border border-dungeon-500/50 rounded-3xl shadow-2xl
+                        overflow-hidden max-h-[80dvh]"
+                 (click)="$event.stopPropagation()">
+              <!-- Card image -->
+              <div class="flex items-center justify-center p-4 bg-dungeon-950/40">
+                @if (card.image) {
+                  <img [src]="card.image" [alt]="card.name"
+                       class="w-36 rounded-2xl shadow-2xl border-2 border-dungeon-600/50"
+                       style="aspect-ratio: 63.5/88.9; object-fit: cover;">
+                } @else {
+                  <div class="w-36 rounded-2xl border-2 border-dungeon-600/50 bg-dungeon-800 flex items-center justify-center text-4xl"
+                       style="aspect-ratio: 63.5/88.9;">💰</div>
+                }
+              </div>
+              <!-- Details -->
+              <div class="flex-1 flex flex-col gap-3 p-4 overflow-y-auto">
+                <h2 class="text-base font-bold text-gold-200 leading-snug">{{ card.name }}</h2>
+                @if ((card.power ?? 0) > 0) {
+                  <p class="font-heading text-[10px] text-amber-400">+{{ card.power }} puissance</p>
+                }
+                @if (card.levelUp != null) {
+                  <p class="font-heading text-[10px] text-green-400">+{{ card.levelUp }} niveau</p>
+                }
+                @if (card.effect) {
+                  <p class="text-xs text-dungeon-300 leading-relaxed">{{ card.effect }}</p>
+                }
+                <button class="mkn-btn-ghost !py-2 !text-sm mt-auto" (click)="sharePreviewCard.set(null)">
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        }
+      }
+
       @default {
         <p class="font-heading text-sm text-dungeon-600">En attente de la partie…</p>
       }
@@ -432,7 +574,8 @@
 
     <!-- Sell items button — visible in all non-combat phases, for any player -->
     @if (phase() !== 'MonsterFight' && phase() !== 'FleeReaction' && phase() !== 'ForcedFlee'
-         && phase() !== 'FleeSuccessReaction' && phase() !== 'BodyPillage') {
+         && phase() !== 'FleeSuccessReaction' && phase() !== 'BodyPillage'
+         && phase() !== 'TreasureShare') {
       <button type="button"
               class="absolute bottom-4 right-4 flex items-center gap-2 px-3 py-2 rounded-xl
                      font-heading text-[10px] font-bold uppercase tracking-[0.15em]
@@ -467,7 +610,7 @@
            [class]="player.id === currentPlayerId() ? 'player-card-active' : 'player-card-idle'"
            (click)="inspectedPlayer.set(player)">
         <div class="level-orb w-9 h-9 mb-1"
-             [class]="player.id === currentPlayerId() ? 'level-orb-active' : 'level-orb-idle'"
+             [class]="(player.id === currentPlayerId() ? 'level-orb-active' : 'level-orb-idle') + (flashingPlayerIds().has(player.id) ? ' animate-level-change' : '')"
              style="font-size: 0.85rem">
           {{ player.level }}
         </div>
@@ -491,7 +634,7 @@
         <!-- Name row with level orb -->
         <div class="flex items-center gap-2.5 mb-2.5">
           <div class="level-orb shrink-0"
-               [class]="player.id === currentPlayerId() ? 'level-orb-active' : 'level-orb-idle'">
+               [class]="(player.id === currentPlayerId() ? 'level-orb-active' : 'level-orb-idle') + (flashingPlayerIds().has(player.id) ? ' animate-level-change' : '')">
             {{ player.level }}
           </div>
           <div class="min-w-0 flex-1">
@@ -554,10 +697,12 @@
   <div class="game-hand">
     <app-hand
       [cards]="myHand()"
+      [equipped]="myEquipped()"
       [phase]="phase()"
       [isMyTurn]="isMyTurn()"
+      [mustDonate]="mustDonate()"
+      [playerGender]="gs.myGender()"
       (cardPlayed)="onCardPlayed($event)"
-      (cardEquipped)="onCardEquipped($event)"
     />
   </div>
 </div>
@@ -857,6 +1002,53 @@
     [player]="me"
     (closed)="sellPanelOpen.set(false)"
     (sold)="sellItems($event)" />
+}
+
+<!-- ── Phase announcement ── -->
+@if (gs.phaseAnnouncement(); as label) {
+  <div class="fixed top-14 inset-x-0 z-[780] flex justify-center px-4 pointer-events-none">
+    <div class="animate-phase-announce font-heading font-bold text-base
+                bg-dungeon-950/96 border border-gold-800/40 rounded-2xl
+                px-8 py-3 shadow-2xl backdrop-blur-sm text-gold-300 tracking-wide">
+      {{ label }}
+    </div>
+  </div>
+}
+
+<!-- ── Card spotlight ── -->
+@if (gs.spotlightCard(); as entry) {
+  <div class="fixed inset-0 z-[760] flex flex-col items-center justify-center gap-5
+              bg-black/88 backdrop-blur-md cursor-pointer"
+       (click)="dismissSpotlight()">
+    <div class="animate-card-spotlight flex flex-col items-center gap-4"
+         (click)="$event.stopPropagation()">
+      @if (entry.card.image) {
+        <img [src]="entry.card.image" [alt]="entry.card.name"
+             class="h-72 rounded-3xl border-2 border-gold-800/60"
+             style="aspect-ratio: 63.5/88.9; object-fit: cover;
+                    filter: drop-shadow(0 20px 60px rgba(0,0,0,0.95)) drop-shadow(0 0 40px rgba(212,168,60,0.38));">
+      } @else {
+        <div class="h-72 flex flex-col items-center justify-center rounded-3xl border-2 border-dungeon-500/60
+                    bg-dungeon-900/95 px-8 gap-3"
+             style="aspect-ratio: 63.5/88.9; filter: drop-shadow(0 20px 60px rgba(0,0,0,0.95));">
+          <span class="text-4xl text-dungeon-500">◈</span>
+          <span class="font-bold text-dungeon-200 text-sm text-center leading-snug">{{ entry.card.name }}</span>
+        </div>
+      }
+      <div class="text-center bg-dungeon-950/90 rounded-2xl px-6 py-3
+                  border border-dungeon-700/50 backdrop-blur-sm shadow-2xl max-w-xs">
+        <p class="font-bold text-gold-200 text-base leading-snug">{{ entry.card.name }}</p>
+        <p class="text-sm text-gold-500 font-semibold mt-1">{{ entry.playerName }}</p>
+        <p class="text-xs text-dungeon-400 mt-0.5">{{ entry.description }}</p>
+        <p class="text-[10px] text-dungeon-700 mt-2 italic">Appuyez pour fermer</p>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Game animation overlay (combat result / flee dice) ── -->
+@if (gs.currentAnimation(); as anim) {
+  <app-game-animation [event]="anim" />
 }
 
 <!-- ── Action error toast ── -->

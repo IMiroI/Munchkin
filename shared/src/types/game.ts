@@ -31,6 +31,8 @@ export enum GamePhase {
   EndTurn = 'EndTurn',
   /** Items from a dead player are available for other players to pick (highest level first) */
   BodyPillage = 'BodyPillage',
+  /** Winner distributes combat treasures — helpers can receive some before they go to the hand */
+  TreasureShare = 'TreasureShare',
 }
 
 export interface GameState {
@@ -99,4 +101,10 @@ export interface GameState {
   pendingCurseTarget?: string;
   /** Card drawn from the door deck face-up (non-monster, non-curse) — visible to all players */
   lastRevealedCard?: Card;
+  /** During TreasureShare: treasure cards won in combat, pending distribution to winner + helpers */
+  pendingShareTreasures?: Card[];
+  /** During TreasureShare: IDs of helpers who may receive some of the pending treasure cards */
+  pendingShareHelperIds?: string[];
+  /** Set by FIGHT_MONSTER resolution: true = player won, false = monster won. Used for the combat-result animation. */
+  lastCombatWon?: boolean;
 }

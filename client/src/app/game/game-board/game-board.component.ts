@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import type { Card, Player } from '@munchkin/shared';
 import { CardType, GamePhase } from '@munchkin/shared';
 import { GameService } from '../../services/game.service';
@@ -6,12 +6,13 @@ import { HandComponent } from '../hand/hand.component';
 import { CombatOverlayComponent } from '../combat-overlay/combat-overlay.component';
 import { PlayerInspectComponent } from '../player-inspect/player-inspect.component';
 import { SellItemsComponent } from '../sell-items/sell-items.component';
+import { GameAnimationComponent } from '../game-animation/game-animation.component';
 
 @Component({
   selector: 'app-game-board',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HandComponent, CombatOverlayComponent, PlayerInspectComponent, SellItemsComponent],
+  imports: [HandComponent, CombatOverlayComponent, PlayerInspectComponent, SellItemsComponent, GameAnimationComponent],
   templateUrl: './game-board.component.html',
   host: { style: 'display:block;min-height:100dvh;' },
 })
@@ -46,6 +47,43 @@ export class GameBoardComponent {
   /** Card from log history the player is previewing */
   protected readonly logDetailCard = signal<Card | null>(null);
 
+  /** Card being previewed in the TreasureShare distribution modal */
+  protected readonly sharePreviewCard = signal<Card | null>(null);
+
+  // ── TreasureShare ────────────────────────────────────────────────────────────
+
+  protected readonly pendingShareTreasures = this.gs.pendingShareTreasures;
+  protected readonly pendingShareHelperIds = this.gs.pendingShareHelperIds;
+
+  /** True if I am one of the helpers in the current TreasureShare phase */
+  protected readonly isHelperInShare = computed(() =>
+    this.gs.pendingShareHelperIds().includes(this.gs.myPlayerId()),
+  );
+
+  /** True if I can see the pending treasures (am winner or helper) */
+  protected readonly canSeeTreasures = computed(() =>
+    this.isMyTurn() || this.isHelperInShare(),
+  );
+
+  /** Helpers with names resolved from allPlayers, for the TreasureShare UI */
+  protected readonly shareHelpers = computed(() =>
+    this.gs.pendingShareHelperIds()
+      .map(id => this.allPlayers().find(p => p.id === id))
+      .filter((p): p is NonNullable<typeof p> => p != null)
+      .map(p => ({ id: p.id, name: p.name })),
+  );
+
+  /** Local assignment map: cardId → toPlayerId (winner's choices, not yet sent) */
+  protected readonly treasureAssignments = signal<Map<string, string>>(new Map());
+
+  private readonly _shareEffect = effect(() => {
+    if (this.phase() === GamePhase.TreasureShare && this.isMyTurn()) {
+      const myId = this.gs.myPlayerId();
+      const cards = untracked(() => this.pendingShareTreasures());
+      this.treasureAssignments.set(new Map(cards.map(c => [c.id, myId])));
+    }
+  });
+
   /** Revealed card from door deck (face-up for all to see) */
   protected readonly lastRevealedCard = this.gs.lastRevealedCard;
 
@@ -54,6 +92,23 @@ export class GameBoardComponent {
 
   /** Whether the sell-items panel is open */
   protected readonly sellPanelOpen = signal(false);
+
+  /** Players whose level-orb should flash (set during level-change animation) */
+  protected readonly flashingPlayerIds = signal(new Set<string>());
+  private readonly _prevLevels = new Map<string, number>();
+  private readonly _levelEffect = effect(() => {
+    const players = this.allPlayers();
+    const flashing = new Set<string>();
+    for (const p of players) {
+      const prev = this._prevLevels.get(p.id);
+      if (prev !== undefined && prev !== p.level) flashing.add(p.id);
+      this._prevLevels.set(p.id, p.level);
+    }
+    if (flashing.size > 0) {
+      this.flashingPlayerIds.set(flashing);
+      setTimeout(() => this.flashingPlayerIds.set(new Set()), 700);
+    }
+  });
 
   /** Monster cards in my hand that I can play to look for trouble */
   protected readonly myHandMonsters = computed(() =>
@@ -78,8 +133,9 @@ export class GameBoardComponent {
       case GamePhase.Loot:        return 'Piller ou chercher des ennuis';
       case GamePhase.Charity:     return 'Charité';
       case GamePhase.EndTurn:     return 'Fin de tour';
-      case GamePhase.BodyPillage: return 'Pillage du cadavre';
-      default:                    return 'En attente…';
+      case GamePhase.BodyPillage:   return 'Pillage du cadavre';
+      case GamePhase.TreasureShare: return 'Distribution des Trésors';
+      default:                      return 'En attente…';
     }
   });
 
@@ -203,8 +259,8 @@ export class GameBoardComponent {
     this.action({ type: 'PLAY_CARD', cardId: card.id, targetId: targetPlayerId });
   }
 
-  protected onCardEquipped(cardId: string): void {
-    this.action({ type: 'PLAY_CARD', cardId });
+  protected dismissSpotlight(): void {
+    this.gs.spotlightCard.set(null);
   }
 
   protected pickBodyLoot(cardId: string): void {
@@ -217,6 +273,22 @@ export class GameBoardComponent {
 
   protected giveItem(itemId: string, targetPlayerId: string): void {
     this.action({ type: 'GIVE_ITEM', itemId, targetPlayerId });
+  }
+
+  protected assignTreasure(cardId: string, toPlayerId: string): void {
+    this.treasureAssignments.update(m => {
+      const next = new Map(m);
+      next.set(cardId, toPlayerId);
+      return next;
+    });
+  }
+
+  protected confirmShare(): void {
+    const id = this.gs.gameState()?.id;
+    if (!id) return;
+    const assignments = Array.from(this.treasureAssignments().entries())
+      .map(([cardId, toPlayerId]) => ({ cardId, toPlayerId }));
+    this.action({ type: 'SHARE_TREASURES', assignments });
   }
 
   protected sellItems(payload: { cardIds: string[]; doubleCardId?: string }): void {

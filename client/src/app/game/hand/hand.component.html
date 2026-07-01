@@ -1,10 +1,67 @@
-<div class="h-full flex gap-3 px-3 py-2.5
-            bg-gradient-to-b from-dungeon-800/60 to-dungeon-900/90 overflow-hidden" cdkDropListGroup>
+<div class="h-full flex gap-0 bg-gradient-to-b from-dungeon-800/60 to-dungeon-900/90 overflow-hidden">
+
+  <!-- ══════════════════════════════════════════════════════
+       Equipped items — left strip
+  ══════════════════════════════════════════════════════ -->
+  <div class="flex flex-col gap-1 shrink-0 w-[80px] border-r border-dungeon-700/40
+              bg-dungeon-900/40 px-1.5 py-2 overflow-y-auto"
+       style="scrollbar-width: none;">
+
+    <!-- Label -->
+    <span class="font-heading text-[7px] font-bold uppercase tracking-[0.18em]
+                 text-dungeon-600 shrink-0 px-0.5">⚔ Équipé</span>
+
+    @if (equipped().length === 0) {
+      <div class="flex-1 flex items-center justify-center">
+        <span class="text-[9px] text-dungeon-700 italic font-heading text-center leading-tight px-1">
+          Aucun objet
+        </span>
+      </div>
+    } @else {
+      @for (card of equipped(); track card.id) {
+        <button type="button"
+                class="relative shrink-0 rounded-lg overflow-hidden border border-dungeon-600/50
+                       hover:border-gold-800/70 transition-all duration-150 active:scale-95
+                       group/eq w-full cursor-pointer"
+                style="aspect-ratio: 63.5/88.9;"
+                (click)="previewCard.set(card)">
+
+          @if (card.image) {
+            <img [src]="card.image" [alt]="card.name"
+                 class="w-full h-full object-cover">
+          } @else {
+            <div class="w-full h-full flex flex-col items-center justify-center gap-0.5 p-1"
+                 [class]="colorClass(card)">
+              <span class="text-[14px] opacity-30 select-none">{{ cardArtSymbol(card) }}</span>
+              <span class="text-[7px] font-semibold text-center leading-tight break-words hyphens-auto w-full">
+                {{ card.name }}
+              </span>
+            </div>
+          }
+
+          <!-- Power badge -->
+          @if (statBadge(card); as badge) {
+            <div class="absolute bottom-0 inset-x-0
+                        bg-gradient-to-t from-black/90 via-black/50 to-transparent
+                        pb-0.5 pt-3 text-center">
+              <span class="font-black text-[10px] tabular-nums leading-none"
+                    [class]="badgeColor(card)">{{ badge.value }}</span>
+            </div>
+          }
+
+          <!-- Hover glow -->
+          <div class="absolute inset-0 opacity-0 group-hover/eq:opacity-100 transition-opacity duration-200
+                      pointer-events-none"
+               style="box-shadow: 0 0 12px rgba(212,168,60,0.25) inset;"></div>
+        </button>
+      }
+    }
+  </div>
 
   <!-- ══════════════════════════════════════════════════════
        Hand cards
   ══════════════════════════════════════════════════════ -->
-  <div class="flex-1 flex flex-col gap-1.5 min-w-0">
+  <div class="flex-1 flex flex-col gap-1.5 min-w-0 px-3 py-2.5">
 
     <!-- Header row -->
     <div class="flex items-center justify-between shrink-0 px-0.5">
@@ -17,20 +74,13 @@
     </div>
 
     <!-- Card list — items-end so fan rotates from bottom -->
-    <div
-      cdkDropList
-      id="hand-list"
-      [cdkDropListData]="cards()"
-      class="flex gap-2 overflow-x-auto flex-1 items-end pb-1 min-h-0"
-      style="scrollbar-width: thin; scrollbar-color: #5c3400 transparent; overflow-y: visible;">
+    <div class="flex gap-2 overflow-x-auto flex-1 items-end pb-1 min-h-0"
+         style="scrollbar-width: thin; scrollbar-color: #5c3400 transparent; overflow-y: visible;">
 
       @for (card of cards(); track card.id; let i = $index) {
-        <div
-          cdkDrag
-          [cdkDragData]="card"
-          [class]="cardClasses(card)"
-          [style.--fan-r]="cardFanRot(i, cards().length) + 'deg'"
-          (click)="onCardClick(card)">
+        <div [class]="cardClasses(card)"
+             [style.--fan-r]="cardFanRot(i, cards().length) + 'deg'"
+             (click)="onCardClick(card)">
 
           <!-- Card image (if available) -->
           @if (card.image) {
@@ -157,44 +207,12 @@
                 Châtiment&nbsp;: {{ card.badStuff }}
               </p>
             }
-            @if (isMyTurn() && !isPlayable(card)) {
+            @if (!isPlayable(card)) {
               <p class="mt-1.5 text-blood-400/70 text-[10px] font-heading border-t border-dungeon-600/50 pt-1">
-                Non jouable en phase "{{ phase() }}"
+                {{ notPlayableReason(card) }}
               </p>
             }
           </div>
-
-          <!-- CDK drag placeholder -->
-          <ng-template cdkDragPlaceholder>
-            <div class="w-[80px] h-[136px] rounded-xl border-2 border-dashed
-                        border-dungeon-500/50 bg-dungeon-700/20">
-            </div>
-          </ng-template>
-
-          <!-- CDK drag preview -->
-          <ng-template cdkDragPreview>
-            <div class="w-[80px] h-[136px] rounded-xl border-2 opacity-90 rotate-6 overflow-hidden
-                        flex flex-col items-center justify-center gap-1 p-2 shadow-2xl"
-                 [class]="colorClass(card)">
-              @if (card.image) {
-                <img [src]="card.image" [alt]="card.name"
-                     class="absolute inset-0 w-full h-full object-cover rounded-[10px]">
-              } @else {
-                <div class="absolute inset-0 bg-gradient-to-b from-white/8 to-transparent rounded-[10px]"></div>
-                <span class="font-heading text-[7px] opacity-50 uppercase tracking-wider relative z-10">
-                  {{ typeLabel(card) }}
-                </span>
-                <span class="text-[10px] font-bold text-center leading-snug relative z-10 px-1">
-                  {{ card.name }}
-                </span>
-                @if (statBadge(card); as badge) {
-                  <span class="text-[20px] font-black relative z-10" [class]="badgeColor(card)">
-                    {{ badge.value }}
-                  </span>
-                }
-              }
-            </div>
-          </ng-template>
         </div>
       }
 
@@ -205,21 +223,6 @@
         </div>
       }
     </div>
-  </div>
-
-  <!-- ══════════════════════════════════════════════════════
-       Equip drop zone
-  ══════════════════════════════════════════════════════ -->
-  <div
-    cdkDropList
-    id="equip-zone"
-    [cdkDropListData]="emptyCardList"
-    (cdkDropListDropped)="onEquip($event)"
-    class="equip-zone h-full">
-    <span class="text-2xl pointer-events-none select-none opacity-40">⚔</span>
-    <span class="font-heading text-[8px] text-dungeon-500 leading-snug px-1.5 pointer-events-none uppercase tracking-wider">
-      Équiper
-    </span>
   </div>
 </div>
 
@@ -336,6 +339,12 @@
               {{ card.goldValue }} po
             </span>
           }
+          @if (equipped().includes(card)) {
+            <span class="font-heading text-[10px] px-2.5 py-1 rounded-full
+                         bg-dungeon-800/60 border border-gold-900/40 text-gold-700">
+              ✦ Équipé
+            </span>
+          }
         </div>
 
         <!-- Effect text -->
@@ -352,15 +361,23 @@
         }
 
         <!-- Actions -->
-        <div class="flex gap-2 mt-auto pt-2">
-          @if (isPlayable(card)) {
-            <button class="mkn-btn-primary flex-1 !py-2.5 !text-sm" (click)="onPlayFromPreview()">
-              Jouer cette carte
-            </button>
+        <div class="flex flex-col gap-2 mt-auto pt-2">
+          @if (!isPlayable(card)) {
+            <p class="font-heading text-[10px] text-blood-400/80 border border-blood-900/40
+                       bg-blood-950/30 rounded-xl px-3 py-2 leading-snug">
+              {{ notPlayableReason(card) }}
+            </p>
           }
-          <button class="mkn-btn-ghost flex-1 !py-2.5 !text-sm" (click)="onClosePreview()">
-            Fermer
-          </button>
+          <div class="flex gap-2">
+            @if (isPlayable(card)) {
+              <button class="mkn-btn-primary flex-1 !py-2.5 !text-sm" (click)="onPlayFromPreview()">
+                {{ playButtonLabel(card) }}
+              </button>
+            }
+            <button class="mkn-btn-ghost flex-1 !py-2.5 !text-sm" (click)="onClosePreview()">
+              Fermer
+            </button>
+          </div>
         </div>
       </div>
 

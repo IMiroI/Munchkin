@@ -68,4 +68,11 @@ export type ClientGameAction =
   /** Give an equipped item to another player (out of combat — bribes, gifts) */
   | { type: 'GIVE_ITEM'; itemId: string; targetPlayerId: string }
   /** During BodyPillage: current picker takes one card from the dead player's items */
-  | { type: 'PICK_BODY_LOOT'; cardId: string };
+  | { type: 'PICK_BODY_LOOT'; cardId: string }
+  /** During TreasureShare: active player assigns each combat treasure to themselves or a helper */
+  | { type: 'SHARE_TREASURES'; assignments: Array<{ cardId: string; toPlayerId: string }> };
+
+/** Transient animation events broadcast by the server (not stored in game state). */
+export type GameAnimationEvent =
+  | { type: 'FLEE_DICE'; playerName: string; roll: number; success: boolean }
+  | { type: 'COMBAT_RESULT'; playerName: string; won: boolean; monsterName: string };

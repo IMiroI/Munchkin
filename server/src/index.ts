@@ -300,6 +300,24 @@ io.on('connection', (socket) => {
       const logEntry = buildLogEntry(state, newState, playerId, socket.data.playerName, action);
       io.to(gameId).emit('game:log', logEntry);
 
+      // Broadcast transient animation events
+      if (action.type === 'RUN_AWAY') {
+        io.to(gameId).emit('game:animation', {
+          type: 'FLEE_DICE',
+          playerName: socket.data.playerName,
+          roll: action.dieRoll,
+          success: newState.phase !== GamePhase.FleeReaction,
+        });
+      }
+      if (action.type === 'FIGHT_MONSTER') {
+        io.to(gameId).emit('game:animation', {
+          type: 'COMBAT_RESULT',
+          playerName: socket.data.playerName,
+          won: newState.lastCombatWon === true,
+          monsterName: state.currentMonster?.name ?? 'le monstre',
+        });
+      }
+
       const winner = newState.players.find(p => p.level >= 10);
       if (winner) {
         const winLog: ActionLogEntry = {

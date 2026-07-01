@@ -1,7 +1,7 @@
 import { GamePhase, CardType, playerRace, playerRaces, playerClass, playerClasses } from '@munchkin/shared';
 import type { GameState, Player, Card, CurseEffect } from '@munchkin/shared';
 import { DeckManager } from './DeckManager.js';
-import { CombatResolver } from './CombatResolver.js';
+import { CombatResolver, equipmentBonus, classBonus } from './CombatResolver.js';
 import type { GameAction, LevelChange } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -20,8 +20,7 @@ function updatePlayer(state: GameState, updated: Player): GameState {
 }
 
 function withCombatPower(player: Player): Player {
-  const equipBonus = player.equipped.reduce((sum, c) => sum + (c.power ?? 0), 0);
-  return { ...player, combatPower: player.level + equipBonus };
+  return { ...player, combatPower: player.level + equipmentBonus(player) + classBonus(player) };
 }
 
 function applyLevelChange(player: Player, delta: LevelChange, isDeath: boolean): Player {
@@ -129,11 +128,11 @@ function splitAttachments(
 }
 
 /** After combat, return to the original player for Loot if combat was transferred, else go to Charity. */
-function postCombatTransition(state: GameState): Pick<GameState, 'phase' | 'currentPlayerId' | 'transferOriginalPlayerId' | 'combatBackstabPenalty' | 'backstabLog'> {
+function postCombatTransition(state: GameState): Pick<GameState, 'phase' | 'currentPlayerId' | 'transferOriginalPlayerId' | 'combatBackstabPenalty' | 'backstabLog' | 'lastCombatWon'> {
   if (state.transferOriginalPlayerId) {
-    return { phase: GamePhase.Loot, currentPlayerId: state.transferOriginalPlayerId, transferOriginalPlayerId: undefined, combatBackstabPenalty: undefined, backstabLog: undefined };
+    return { phase: GamePhase.Loot, currentPlayerId: state.transferOriginalPlayerId, transferOriginalPlayerId: undefined, combatBackstabPenalty: undefined, backstabLog: undefined, lastCombatWon: false };
   }
-  return { phase: GamePhase.Charity, currentPlayerId: state.currentPlayerId, transferOriginalPlayerId: undefined, combatBackstabPenalty: undefined, backstabLog: undefined };
+  return { phase: GamePhase.Charity, currentPlayerId: state.currentPlayerId, transferOriginalPlayerId: undefined, combatBackstabPenalty: undefined, backstabLog: undefined, lastCombatWon: false };
 }
 
 /** After a successful flee, enter FleeSuccessReaction so rerollFlee cards can be played. */
@@ -849,10 +848,9 @@ export const TurnManager = {
           if (!isSangMeleSuperMode && card.forbiddenRace != null && races.includes(card.forbiddenRace)) return false;
           if (card.requiredNoRace && playerRace(player) !== 'human') return false;
           if (card.requiredCurrentGender != null && player.gender !== card.requiredCurrentGender) return false;
-          // Race card: max 1 normally; max 2 with Sang-mêlé
+          // Race card: max 2 with Sang-mêlé, otherwise replace existing race
           if (card.type === CardType.Race) {
             const currentRaceCount = player.equipped.filter(c => c.type === CardType.Race).length;
-            if (currentRaceCount >= 1 && !hasSangMele) return false;
             if (currentRaceCount >= 2) return false;
           }
           if (card.handUsage != null) {
@@ -1013,6 +1011,11 @@ export const TurnManager = {
         return state.bodyPillagingItems?.some(c => c.id === action.cardId) ?? false;
       }
 
+      case 'SHARE_TREASURES': {
+        if (state.phase !== GamePhase.TreasureShare) return false;
+        return playerId === state.currentPlayerId;
+      }
+
       default:
         return false;
     }
@@ -1171,6 +1174,7 @@ export const TurnManager = {
             combatLevelCap: undefined as number | undefined,
             combatBackstabPenalty: undefined as number | undefined,
             backstabLog: undefined as { thiefId: string; victimId: string }[] | undefined,
+            lastCombatWon: true as boolean,
           };
 
           // MonsterBooster treasure modifier (positive = extra, negative = fewer, e.g. d-004 Bébé)
@@ -1249,6 +1253,42 @@ export const TurnManager = {
             finalTreasureDeck = newDeck;
           }
 
+          const applyHelperLevelGains = (s: GameState): GameState => {
+            let out = s;
+            for (const helper of helpers) {
+              if (helper.equipped.some(c => c.raceHelperGainsLevelPerMonster)) {
+                out = updatePlayer(out, withCombatPower({
+                  ...helper, level: Math.min(helper.level + allKilledMonsters.length, 9),
+                }));
+              }
+            }
+            return out;
+          };
+
+          // If there are helpers and at least one treasure, enter TreasureShare so the winner
+          // can optionally give some cards to the helper(s) before they go to the hand.
+          if (helpers.length > 0 && allGained.length > 0) {
+            const updatedActive = withCombatPower({
+              ...activePlayer,
+              level: Math.min(activePlayer.level + levelsGained, state.combatLevelCap ?? 10),
+              hand: handWithoutAll,
+              nextCombatPenalty: undefined,
+              nextCombatNoItemBonus: undefined,
+            });
+            const nextState = applyHelperLevelGains(updatePlayer(state, updatedActive));
+            return {
+              ...nextState,
+              ...combatCleanup,
+              phase: GamePhase.TreasureShare,
+              currentPlayerId: activePlayer.id,
+              pendingShareTreasures: allGained,
+              pendingShareHelperIds: helpers.map(h => h.id),
+              treasureDeck: finalTreasureDeck,
+              discardDoor: baseDiscardDoor,
+              discardTreasure: baseDiscardTreasure,
+            };
+          }
+
           const updatedActive = withCombatPower({
             ...activePlayer,
             level: Math.min(activePlayer.level + levelsGained, state.combatLevelCap ?? 10),
@@ -1257,17 +1297,8 @@ export const TurnManager = {
             nextCombatNoItemBonus: undefined,
           });
 
-          let nextState: GameState = updatePlayer(state, updatedActive);
-          for (const helper of helpers) {
-            if (helper.equipped.some(c => c.raceHelperGainsLevelPerMonster)) {
-              nextState = updatePlayer(nextState, withCombatPower({
-                ...helper, level: Math.min(helper.level + allKilledMonsters.length, 9),
-              }));
-            }
-          }
-
           return {
-            ...nextState,
+            ...applyHelperLevelGains(updatePlayer(state, updatedActive)),
             ...postCombatTransition(state),
             ...combatCleanup,
             treasureDeck: finalTreasureDeck,
@@ -1314,7 +1345,7 @@ export const TurnManager = {
             preDeathPlayer,
             [...state.discardDoor, ...allDefeatedMonsters, ...turningDoor, ...berserkerDoor],
             [...state.discardTreasure, ...allBonusCards, ...monsterBonusCards, ...turningTreasure, ...berserkerTreasure],
-            { combatBonusCards: undefined, combatMonsterBonusCards: undefined, forcedHelperId: undefined, combatLevelCap: undefined },
+            { combatBonusCards: undefined, combatMonsterBonusCards: undefined, forcedHelperId: undefined, combatLevelCap: undefined, lastCombatWon: false },
           );
         }
 
@@ -1348,6 +1379,7 @@ export const TurnManager = {
               neighborDiscardTarget: state.currentPlayerId,
               neighborDiscardQueue: highestQueue,
               neighborPickGivesToPicker: true,
+              lastCombatWon: false,
             };
           }
         }
@@ -1376,6 +1408,7 @@ export const TurnManager = {
               neighborDiscardQueue: allPlayersQueue,
               neighborPickIncludesHand: true,
               neighborPickGivesToPicker: true,
+              lastCombatWon: false,
             };
           }
         }
@@ -1401,6 +1434,7 @@ export const TurnManager = {
             backstabLog: undefined,
             neighborDiscardTarget: state.currentPlayerId,
             neighborDiscardQueue: neighborQueue,
+            lastCombatWon: false,
           };
         }
 
@@ -1425,6 +1459,7 @@ export const TurnManager = {
             neighborDiscardQueue: handToOthersQueue,
             neighborPickFromHandOnly: true,
             neighborPickGivesToPicker: true,
+            lastCombatWon: false,
           };
         }
 
@@ -1440,13 +1475,13 @@ export const TurnManager = {
             combatBackstabPenalty: undefined, backstabLog: undefined,
           };
           if (totalGold >= required) {
-            return { ...updatePlayer(state, updatedPlayer), ...combatDiscardBase, phase: GamePhase.BadStuffGoldDiscard, pendingGoldDiscardRequired: required };
+            return { ...updatePlayer(state, updatedPlayer), ...combatDiscardBase, phase: GamePhase.BadStuffGoldDiscard, pendingGoldDiscardRequired: required, lastCombatWon: false };
           }
           // Can't afford: lose all equipped + level penalty
           const lostItems = [...updatedPlayer.equipped];
           const stripped = withCombatPower({ ...updatedPlayer, equipped: [] });
           const final = applyLevelChange(stripped, levelDelta, false);
-          return { ...updatePlayer(state, final), ...combatDiscardBase, discardTreasure: [...combatDiscardBase.discardTreasure, ...lostItems] };
+          return { ...updatePlayer(state, final), ...combatDiscardBase, discardTreasure: [...combatDiscardBase.discardTreasure, ...lostItems], lastCombatWon: false };
         }
 
         // badStuffDieRollItemLoss: roll a die, player loses that many equipped OR hand cards
@@ -1464,6 +1499,7 @@ export const TurnManager = {
             combatMonsterBonusCards: undefined,
             combatBackstabPenalty: undefined,
             backstabLog: undefined,
+            lastCombatWon: false,
           };
         }
 
@@ -3649,6 +3685,35 @@ export const TurnManager = {
         }
 
         return { ...baseState, bodyPillagingItems: remainingItems, bodyPillagingQueue: nextQueue };
+      }
+
+      // ---------------------------------------------------------------
+      case 'SHARE_TREASURES': {
+        const pendingCards = state.pendingShareTreasures ?? [];
+        const validTargets = new Set([_playerId, ...(state.pendingShareHelperIds ?? [])]);
+        const assignMap = new Map(
+          action.assignments
+            .filter(a => validTargets.has(a.toPlayerId))
+            .map(a => [a.cardId, a.toPlayerId]),
+        );
+        const cardsByPlayer = new Map<string, typeof pendingCards>();
+        for (const card of pendingCards) {
+          const to = assignMap.get(card.id) ?? _playerId;
+          if (!cardsByPlayer.has(to)) cardsByPlayer.set(to, []);
+          cardsByPlayer.get(to)!.push(card);
+        }
+        let nextState = state;
+        for (const [pid, cards] of cardsByPlayer) {
+          const p = getPlayer(nextState, pid);
+          if (!p) continue;
+          nextState = updatePlayer(nextState, { ...p, hand: [...p.hand, ...cards] });
+        }
+        return {
+          ...nextState,
+          ...postCombatTransition(state),
+          pendingShareTreasures: undefined,
+          pendingShareHelperIds: undefined,
+        };
       }
     }
   },

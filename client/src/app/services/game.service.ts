@@ -1,6 +1,6 @@
 import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
-import type { GameState } from '@munchkin/shared';
-import type { ActionLogEntry, ClientGameAction } from '@munchkin/shared';
+import { GamePhase } from '@munchkin/shared';
+import type { Card, GameState, ActionLogEntry, ClientGameAction, GameAnimationEvent } from '@munchkin/shared';
 import { SocketService } from './socket.service';
 
 @Injectable({ providedIn: 'root' })
@@ -14,6 +14,13 @@ export class GameService {
   readonly gameState = signal<GameState | null>(null);
   readonly actionLog  = signal<ActionLogEntry[]>([]);
   readonly lastError  = signal<string | null>(null);
+
+  readonly spotlightCard = signal<{ card: Card; playerName: string; description: string } | null>(null);
+  readonly phaseAnnouncement = signal<string | null>(null);
+  readonly currentAnimation = signal<GameAnimationEvent | null>(null);
+  private _spotlightTimer: ReturnType<typeof setTimeout> | null = null;
+  private _announcementTimer: ReturnType<typeof setTimeout> | null = null;
+  private _animationTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Current user's player ID — read from the JWT sub claim at boot. */
   readonly myPlayerId = signal<string>(this.readPlayerIdFromJwt());
@@ -60,6 +67,7 @@ export class GameService {
   });
 
   readonly myTotalPower = computed(() => this.myPlayer()?.combatPower ?? 0);
+  readonly myGender    = computed(() => this.myPlayer()?.gender ?? null);
 
   /** Maximum cards the player may hold at end of turn (5 + race bonus) */
   readonly myMaxHandSize = computed(() => {
@@ -73,6 +81,12 @@ export class GameService {
   /** Card drawn face-up from the door deck (visible to all) */
   readonly lastRevealedCard = computed(() => this.gameState()?.lastRevealedCard ?? null);
 
+  readonly combatBonusCards = computed(() => this.gameState()?.combatBonusCards ?? []);
+  readonly combatMonsterBonusCards = computed(() => this.gameState()?.combatMonsterBonusCards ?? []);
+  readonly additionalMonsters = computed(() => this.gameState()?.additionalMonsters ?? []);
+  readonly pendingShareTreasures = computed(() => this.gameState()?.pendingShareTreasures ?? []);
+  readonly pendingShareHelperIds = computed(() => this.gameState()?.pendingShareHelperIds ?? []);
+
   // ---------------------------------------------------------------------------
   // Socket subscriptions
   // ---------------------------------------------------------------------------
@@ -82,13 +96,24 @@ export class GameService {
 
     const s1 = this.socket
       .on('game:state')
-      .subscribe(state => this.gameState.set(state));
+      .subscribe(state => {
+        const prevPhase = this.gameState()?.phase ?? null;
+        this.gameState.set(state);
+        if (prevPhase && state.phase !== prevPhase) {
+          this._announcePhase(state.phase);
+        }
+      });
 
     const s2 = this.socket
       .on('game:log')
-      .subscribe(entry =>
-        this.actionLog.update(log => [...log.slice(-99), entry]),
-      );
+      .subscribe(entry => {
+        this.actionLog.update(log => [...log.slice(-99), entry]);
+        if (entry.card) {
+          if (this._spotlightTimer !== null) clearTimeout(this._spotlightTimer);
+          this.spotlightCard.set({ card: entry.card, playerName: entry.playerName, description: entry.description });
+          this._spotlightTimer = setTimeout(() => this.spotlightCard.set(null), 2800);
+        }
+      });
 
     const s3 = this.socket
       .on('game:error')
@@ -97,7 +122,16 @@ export class GameService {
         setTimeout(() => this.lastError.set(null), 4000);
       });
 
-    destroyRef.onDestroy(() => { s1.unsubscribe(); s2.unsubscribe(); s3.unsubscribe(); });
+    const s4 = this.socket
+      .on('game:animation')
+      .subscribe(event => {
+        if (this._animationTimer !== null) clearTimeout(this._animationTimer);
+        this.currentAnimation.set(event);
+        const duration = event.type === 'FLEE_DICE' ? 3800 : 2800;
+        this._animationTimer = setTimeout(() => this.currentAnimation.set(null), duration);
+      });
+
+    destroyRef.onDestroy(() => { s1.unsubscribe(); s2.unsubscribe(); s3.unsubscribe(); s4.unsubscribe(); });
   }
 
   // ---------------------------------------------------------------------------
@@ -115,6 +149,25 @@ export class GameService {
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
+
+  private _announcePhase(phase: string): void {
+    const labels: Record<string, string> = {
+      KickDown:         '🚪 Ouvrir la Porte',
+      MonsterFight:     '⚔ Combat !',
+      Loot:             '💰 Piller la Salle',
+      Charity:          '🙏 Phase de Charité',
+      CurseReaction:    '🪄 Malédiction !',
+      PreCombatDiscard: '⚔ Sacrifice Requis',
+      BodyPillage:      '💀 Pillage du Cadavre',
+      FleeReaction:     '🏃 Tentative de Fuite',
+      TreasureShare:    '💰 Distribution des Trésors',
+    };
+    const label = labels[phase];
+    if (!label) return;
+    if (this._announcementTimer !== null) clearTimeout(this._announcementTimer);
+    this.phaseAnnouncement.set(label);
+    this._announcementTimer = setTimeout(() => this.phaseAnnouncement.set(null), 2000);
+  }
 
   private readPlayerIdFromJwt(): string {
     try {

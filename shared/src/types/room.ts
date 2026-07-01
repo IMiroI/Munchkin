@@ -1,5 +1,5 @@
 import type { GameState } from './game';
-import type { ClientGameAction, ActionLogEntry } from './action';
+import type { ClientGameAction, ActionLogEntry, GameAnimationEvent } from './action';
 
 export interface RoomPlayer {
   id: string;
@@ -40,4 +40,5 @@ export interface ServerToClientEvents {
   'game:error': (error: { message: string }) => void;
   'game:help:requested': (data: { gameId: string; requesterId: string; requesterName: string }) => void;
   'game:help:responded': (data: { gameId: string; helperId: string; helperName: string; accepted: boolean }) => void;
+  'game:animation': (event: GameAnimationEvent) => void;
 }

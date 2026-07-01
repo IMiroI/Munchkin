@@ -1,10 +1,4 @@
 import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
-import {
-  CdkDrag,
-  CdkDragDrop,
-  CdkDropList,
-  CdkDropListGroup,
-} from '@angular/cdk/drag-drop';
 import type { Card } from '@munchkin/shared';
 import { CardType, GamePhase } from '@munchkin/shared';
 
@@ -12,21 +6,20 @@ import { CardType, GamePhase } from '@munchkin/shared';
   selector: 'app-hand',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CdkDropListGroup, CdkDropList, CdkDrag],
+  imports: [],
   templateUrl: './hand.component.html',
 })
 export class HandComponent {
-  readonly cards     = input<Card[]>([]);
-  readonly phase     = input<GamePhase | null>(null);
-  readonly isMyTurn  = input<boolean>(false);
+  readonly cards        = input<Card[]>([]);
+  readonly equipped     = input<Card[]>([]);
+  readonly phase        = input<GamePhase | null>(null);
+  readonly isMyTurn     = input<boolean>(false);
+  readonly mustDonate   = input<boolean>(false);
+  readonly playerGender = input<'male' | 'female' | null>(null);
 
-  readonly cardPlayed   = output<string>();
-  readonly cardEquipped = output<string>();
+  readonly cardPlayed = output<string>();
 
   protected readonly CardType = CardType;
-
-  /** Typed empty array for the equip drop zone so CDK infers Card[] not never[]. */
-  protected readonly emptyCardList: Card[] = [];
 
   /** Card currently shown in the lightbox preview (null = closed). */
   protected readonly previewCard = signal<Card | null>(null);
@@ -37,34 +30,32 @@ export class HandComponent {
     const phase = this.phase();
     const myTurn = this.isMyTurn();
 
-    // Non-active players can only play MonsterBoosters during combat
     if (!myTurn) {
       return phase === GamePhase.MonsterFight && card.type === CardType.MonsterBooster;
     }
 
     switch (phase) {
       case GamePhase.KickDown:
-        return card.type === CardType.Class ||
-               card.type === CardType.Race ||
-               card.type === CardType.Special ||
-               card.type === CardType.Treasure;
+        if (card.type === CardType.DoorCurse) return true;
+        if (card.type === CardType.Class || card.type === CardType.Race || card.type === CardType.Special) return true;
+        if (card.type === CardType.Treasure) return this._isItemUsable(card);
+        return false;
 
       case GamePhase.Loot:
-        // Monster = chercher des ennuis; everything else as normal
-        return card.type === CardType.Monster ||
-               card.type === CardType.Class ||
-               card.type === CardType.Race ||
-               card.type === CardType.Special ||
-               card.type === CardType.Treasure;
+        if (card.type === CardType.Monster || card.type === CardType.DoorCurse) return true;
+        if (card.type === CardType.Class || card.type === CardType.Race || card.type === CardType.Special) return true;
+        if (card.type === CardType.Treasure) return this._isItemUsable(card);
+        return false;
 
       case GamePhase.MonsterFight:
-        // Equip items mid-combat, play one-shot potions, or discard MonsterBoosters
         if (card.type === CardType.MonsterBooster) return true;
         if (card.type !== CardType.Treasure) return false;
-        return !!card.isOneShot || (card.power ?? 0) > 0;
+        if (!card.isOneShot && (card.power ?? 0) <= 0) return false;
+        return this._isItemUsable(card);
 
       case GamePhase.Charity:
-        // Monsters and curses must be donated, not played
+        // During charity the player donates — no restriction check (they aren't equipping it)
+        if (card.type === CardType.DoorCurse) return true;
         return card.type === CardType.Class ||
                card.type === CardType.Race ||
                card.type === CardType.Special ||
@@ -72,6 +63,155 @@ export class HandComponent {
 
       default:
         return false;
+    }
+  }
+
+  /** True when this Treasure card has no class/race/gender/slot/hand restrictions against the player. */
+  private _isItemUsable(card: Card): boolean {
+    const eq = this.equipped();
+    const playerClasses = eq.filter(c => c.type === CardType.Class && c.classId).map(c => c.classId!);
+    const playerRaces   = eq.filter(c => c.type === CardType.Race  && c.raceId).map(c => c.raceId!);
+
+    if (card.requiredClass && !playerClasses.includes(card.requiredClass)) return false;
+    if (card.forbiddenClass && playerClasses.includes(card.forbiddenClass)) return false;
+    if (card.requiredRace   && !playerRaces.includes(card.requiredRace))   return false;
+    if (card.requiredNoRace && playerRaces.length > 0)                     return false;
+    if (card.forbiddenRace  && playerRaces.includes(card.forbiddenRace))   return false;
+
+    const gender = this.playerGender();
+    if (card.requiredCurrentGender && gender && card.requiredCurrentGender !== gender) return false;
+
+    // One-shot potions don't occupy a slot or hands — only class/race/gender matters
+    if (card.isOneShot) return true;
+
+    // Big-item slot
+    if (card.isBigItem && !eq.some(c => c.raceUnlimitedBigItems)) {
+      const extraSlots  = eq.filter(c => c.extraBigItemSlot).length;
+      const bigEquipped = eq.filter(c => c.isBigItem).length;
+      if (bigEquipped >= 1 + extraSlots) return false;
+    }
+
+    // Equipment slot (headgear / armor / footwear)
+    if (card.equipSlot && eq.some(c => c.equipSlot === card.equipSlot)) return false;
+
+    // Hand slots
+    if ((card.handUsage ?? 0) > 0) {
+      const handsUsed = eq.reduce((sum, c) => sum + (c.handUsage ?? 0), 0);
+      if (handsUsed + (card.handUsage ?? 0) > 2) return false;
+    }
+
+    return true;
+  }
+
+  /** Human-readable explanation of why a card cannot be played right now. */
+  protected notPlayableReason(card: Card): string {
+    const phase  = this.phase();
+    const myTurn = this.isMyTurn();
+
+    if (!myTurn) {
+      return card.type === CardType.MonsterBooster
+        ? 'Amplificateur jouable uniquement en combat actif'
+        : 'Ce n\'est pas votre tour';
+    }
+
+    // ── Item restrictions (Treasure cards) ────────────────────────────────
+    if (card.type === CardType.Treasure && phase !== GamePhase.Charity) {
+      const eq = this.equipped();
+      const playerClasses = eq.filter(c => c.type === CardType.Class && c.classId).map(c => c.classId!);
+      const playerRaces   = eq.filter(c => c.type === CardType.Race  && c.raceId).map(c => c.raceId!);
+
+      if (card.requiredClass && !playerClasses.includes(card.requiredClass))
+        return `Réservé aux ${this._classLabel(card.requiredClass)}s`;
+      if (card.forbiddenClass && playerClasses.includes(card.forbiddenClass))
+        return `Interdit aux ${this._classLabel(card.forbiddenClass)}s`;
+      if (card.requiredRace && !playerRaces.includes(card.requiredRace))
+        return `Réservé aux ${this._raceLabel(card.requiredRace)}s`;
+      if (card.requiredNoRace && playerRaces.length > 0)
+        return 'Réservé aux humains (sans race)';
+      if (card.forbiddenRace && playerRaces.includes(card.forbiddenRace))
+        return `Interdit aux ${this._raceLabel(card.forbiddenRace)}s`;
+
+      const gender = this.playerGender();
+      if (card.requiredCurrentGender && gender && card.requiredCurrentGender !== gender)
+        return card.requiredCurrentGender === 'female'
+          ? 'Réservé aux personnages féminins'
+          : 'Réservé aux personnages masculins';
+
+      if (!card.isOneShot) {
+        if (card.isBigItem && !eq.some(c => c.raceUnlimitedBigItems)) {
+          const extraSlots  = eq.filter(c => c.extraBigItemSlot).length;
+          const bigEquipped = eq.filter(c => c.isBigItem).length;
+          if (bigEquipped >= 1 + extraSlots) return 'Vous portez déjà un grand objet';
+        }
+        if (card.equipSlot && eq.some(c => c.equipSlot === card.equipSlot))
+          return `Emplacement ${this._slotLabel(card.equipSlot)} déjà occupé`;
+        if ((card.handUsage ?? 0) > 0) {
+          const handsUsed   = eq.reduce((sum, c) => sum + (c.handUsage ?? 0), 0);
+          const available   = 2 - handsUsed;
+          if ((card.handUsage ?? 0) > available)
+            return available === 0
+              ? 'Aucune main libre disponible'
+              : 'Nécessite 2 mains — une seule est libre';
+        }
+      }
+    }
+
+    // ── Phase-level reasons ────────────────────────────────────────────────
+    switch (card.type) {
+      case CardType.Monster:
+        if (phase === GamePhase.MonsterFight) return 'Impossible d\'ajouter un monstre en combat';
+        if (phase === GamePhase.Charity)      return 'Donnez ce monstre à un autre joueur';
+        return 'Jouable uniquement pour "chercher des ennuis" (phase pillage)';
+
+      case CardType.MonsterBooster:
+        return 'Amplificateurs jouables uniquement par les non-actifs en combat';
+
+      case CardType.Class:
+      case CardType.Race:
+        if (phase === GamePhase.MonsterFight) return 'Classes et races non jouables en combat';
+        return 'Non jouable dans cette phase';
+
+      case CardType.DoorCurse:
+        return 'Sélectionnez une cible pour lancer la malédiction';
+
+      case CardType.Special:
+        if (phase === GamePhase.MonsterFight) return 'Carte spéciale non jouable en combat';
+        return 'Non jouable dans cette phase';
+
+      case CardType.Treasure:
+        if (phase === GamePhase.MonsterFight) return 'Seuls les objets avec bonus et les potions sont utilisables en combat';
+        return 'Non jouable dans cette phase';
+
+      default:
+        return `Non jouable en phase "${phase}"`;
+    }
+  }
+
+  private _classLabel(c: string): string {
+    switch (c) {
+      case 'warrior': return 'Guerrier';
+      case 'wizard':  return 'Mage';
+      case 'cleric':  return 'Clerc';
+      case 'thief':   return 'Voleur';
+      default:        return c;
+    }
+  }
+
+  private _raceLabel(r: string): string {
+    switch (r) {
+      case 'elf':      return 'Elfe';
+      case 'dwarf':    return 'Nain';
+      case 'halfling': return 'Halfling';
+      default:         return r;
+    }
+  }
+
+  private _slotLabel(s: string): string {
+    switch (s) {
+      case 'headgear': return 'couvre-chef';
+      case 'armor':    return 'armure';
+      case 'footwear': return 'chaussures';
+      default:         return s;
     }
   }
 
@@ -166,6 +306,19 @@ export class HandComponent {
     return 'text-amber-400';
   }
 
+  protected playButtonLabel(card: Card): string {
+    if (
+      this.phase() === GamePhase.Charity &&
+      this.mustDonate() &&
+      card.type !== CardType.Class &&
+      card.type !== CardType.Race &&
+      card.levelUp == null
+    ) {
+      return 'En faire charité';
+    }
+    return 'Jouer cette carte';
+  }
+
   // ── Event handlers ─────────────────────────────────────────────────────────
 
   protected onCardClick(card: Card): void {
@@ -182,12 +335,5 @@ export class HandComponent {
 
   protected onClosePreview(): void {
     this.previewCard.set(null);
-  }
-
-  /** Called when any item is dropped onto the equip zone. */
-  protected onEquip(event: CdkDragDrop<Card[]>): void {
-    const card = event.item.data as Card;
-    if (!this.isEquippable(card)) return;
-    this.cardEquipped.emit(card.id);
   }
 }

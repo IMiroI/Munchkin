@@ -16,90 +16,167 @@
     <!-- ── Header ── -->
     <div class="flex items-center justify-between px-5 py-3
                 border-b border-blood-950/80">
-      <div class="flex items-center gap-3">
-        <div class="flex items-center gap-1.5">
-          <div class="w-1.5 h-1.5 rounded-full bg-blood-500 animate-pulse shrink-0"></div>
-          <span class="font-heading text-[10px] font-bold uppercase tracking-[0.22em] text-blood-400">
-            Combat
-          </span>
-        </div>
-        @if (monster(); as m) {
-          <span class="text-blood-800/60">—</span>
-          <span class="font-heading text-[10px] text-blood-600 truncate max-w-[180px]">{{ m.name }}</span>
-        }
+      <div class="flex items-center gap-1.5">
+        <div class="w-1.5 h-1.5 rounded-full bg-blood-500 animate-pulse shrink-0"></div>
+        <span class="font-heading text-[10px] font-bold uppercase tracking-[0.22em] text-blood-400">
+          Combat
+        </span>
       </div>
       <div class="flex items-center gap-1.5">
         <span class="font-mono text-lg font-black tabular-nums leading-none"
               [class]="timerTextColor()"
-              [class.animate-timer-pulse]="timeLeft() <= 5">
-          {{ timeLeft() }}
+              [class.animate-timer-pulse]="timeLeft() <= 30">
+          {{ timerLabel() }}
         </span>
-        <span class="font-heading text-[8px] text-dungeon-600 uppercase tracking-wider">sec</span>
       </div>
     </div>
 
-    <!-- ── Body ── -->
-    <div class="px-5 py-4">
+    <!-- ── Body (scrollable) ── -->
+    <div class="px-3 py-3 overflow-y-auto" style="max-height: calc(100dvh - 232px);">
 
-      <!-- Power comparison -->
-      <div class="flex items-stretch gap-3 mb-4">
-
-        <!-- Player power orb -->
-        <div class="flex-1 power-orb-player rounded-2xl py-4 px-3
-                    flex flex-col items-center justify-center relative overflow-hidden">
-          <div class="font-heading text-[8px] uppercase tracking-[0.18em] mb-2"
-               [class]="winsWithHelpers() ? 'text-forest-600' : 'text-dungeon-500'">
-            Votre force
+      <!-- Monster(s) info ── compact row per monster -->
+      @if (monster(); as m) {
+        <div class="flex gap-2 mb-2 bg-blood-950/50 border border-blood-900/45 rounded-xl p-2">
+          @if (m.image) {
+            <div class="relative shrink-0 rounded-lg overflow-hidden border border-blood-900/60
+                        shadow-[0_4px_16px_rgba(0,0,0,0.8)]"
+                 style="width: 60px; aspect-ratio: 63.5/88.9;">
+              <img [src]="m.image" [alt]="m.name" class="w-full h-full object-cover">
+              <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/96 to-transparent pb-1 pt-4 text-center">
+                <span class="font-black text-base text-blood-300 tabular-nums leading-none">{{ m.power }}</span>
+              </div>
+            </div>
+          } @else {
+            <div class="relative shrink-0 rounded-lg overflow-hidden border border-blood-900/60
+                        shadow-[0_4px_16px_rgba(0,0,0,0.8)] flex flex-col justify-between
+                        bg-gradient-to-b from-blood-950 to-[#0e0101]"
+                 style="width: 60px; aspect-ratio: 63.5/88.9;">
+              <div class="flex-1 flex items-center justify-center">
+                <span class="text-3xl opacity-10 select-none">☠</span>
+              </div>
+              <div class="text-center pb-1.5">
+                <span class="font-black text-lg text-blood-300 tabular-nums leading-none">{{ m.power }}</span>
+              </div>
+            </div>
+          }
+          <div class="flex-1 min-w-0 flex flex-col gap-1 py-0.5">
+            <p class="font-heading text-[7px] uppercase tracking-[0.18em] text-blood-700">Monstre</p>
+            <p class="font-bold text-blood-100 text-xs leading-snug">{{ m.name }}</p>
+            @if (m.effect) {
+              <p class="text-[9px] text-dungeon-500 leading-relaxed line-clamp-2">{{ m.effect }}</p>
+            }
+            @if (m.badStuff) {
+              <div class="border-t border-blood-900/40 pt-1 mt-auto">
+                <p class="font-heading text-[7px] uppercase tracking-wider text-blood-700 mb-0.5">Châtiment</p>
+                <p class="text-[9px] text-blood-400/80 leading-relaxed line-clamp-2">{{ m.badStuff }}</p>
+              </div>
+            }
           </div>
-          <div class="text-4xl font-black leading-none tabular-nums mb-1"
+        </div>
+      }
+      @for (m of additionalMonsters(); track m.id) {
+        <div class="flex gap-2 mb-2 bg-blood-950/40 border border-blood-900/35 rounded-xl p-2">
+          <div class="font-heading text-[7px] text-blood-700 shrink-0 self-center px-1">+</div>
+          @if (m.image) {
+            <div class="relative shrink-0 rounded-lg overflow-hidden border border-blood-900/50"
+                 style="width: 48px; aspect-ratio: 63.5/88.9;">
+              <img [src]="m.image" [alt]="m.name" class="w-full h-full object-cover">
+              <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/96 to-transparent pb-1 pt-3 text-center">
+                <span class="font-black text-sm text-blood-300 tabular-nums leading-none">{{ m.power }}</span>
+              </div>
+            </div>
+          } @else {
+            <div class="relative shrink-0 rounded-lg overflow-hidden border border-blood-900/50
+                        flex flex-col justify-end bg-gradient-to-b from-blood-950 to-[#0e0101]"
+                 style="width: 48px; aspect-ratio: 63.5/88.9;">
+              <div class="text-center pb-1">
+                <span class="font-black text-sm text-blood-300 tabular-nums leading-none">{{ m.power }}</span>
+              </div>
+            </div>
+          }
+          <div class="flex-1 min-w-0 flex flex-col gap-0.5 py-0.5">
+            <p class="font-heading text-[7px] uppercase tracking-[0.18em] text-blood-800">Clone</p>
+            <p class="font-bold text-blood-200 text-[10px] leading-snug">{{ m.name }}</p>
+          </div>
+        </div>
+      }
+
+      <!-- ── Power comparison ── -->
+      <div class="flex items-stretch gap-2 mb-2">
+
+        <!-- Player power -->
+        <div class="flex-1 power-orb-player rounded-xl py-2 px-2
+                    flex flex-col items-center justify-center relative overflow-hidden">
+          <div class="font-heading text-[7px] uppercase tracking-[0.16em] mb-1"
+               [class]="winsWithHelpers() ? 'text-forest-600' : 'text-dungeon-500'">
+            {{ isMyTurn() ? 'Votre force' : (isHelper() ? 'Puissance équipe' : 'Votre force') }}
+          </div>
+          <div class="text-2xl font-black leading-none tabular-nums"
                [class]="winsWithHelpers() ? 'text-forest-300' : 'text-blood-400'">
             {{ totalPowerWithHelpers() }}
           </div>
           @if (acceptedHelpers().length > 0) {
-            <div class="font-heading text-[9px] text-ocean-500 mt-1">
-              {{ myPower() }} + {{ acceptedHelperPower() }} alliés
+            <div class="font-heading text-[8px] text-ocean-500 mt-0.5">
+              @if (isMyTurn()) {
+                {{ myPower() }}+{{ acceptedHelperPower() }}
+              } @else if (isHelper()) {
+                Ma contrib.: {{ myPower() }}
+              }
             </div>
           }
         </div>
 
-        <!-- VS column -->
-        <div class="flex flex-col items-center justify-center gap-1 shrink-0 w-14">
-          <div class="font-heading text-xs font-bold text-dungeon-600">VS</div>
-          <div class="text-sm font-black tabular-nums"
+        <!-- VS -->
+        <div class="flex flex-col items-center justify-center gap-0.5 shrink-0 w-9">
+          <div class="font-heading text-[10px] font-bold text-dungeon-600">VS</div>
+          <div class="text-xs font-black tabular-nums"
                [class]="winsWithHelpers() ? 'text-forest-400' : 'text-blood-400'">
             {{ diffLabel() }}
           </div>
         </div>
 
-        <!-- Monster power orb -->
-        @if (monster()?.image; as img) {
-          <div class="relative shrink-0 w-[72px] rounded-xl overflow-hidden border border-blood-900/70 shadow-lg"
-               style="aspect-ratio: 63.5/88.9;">
-            <img [src]="img" [alt]="monster()?.name" class="w-full h-full object-cover">
-            <!-- Power badge -->
-            <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent pb-1.5 pt-6 text-center">
-              <span class="font-black text-xl text-blood-300 tabular-nums leading-none">{{ monsterPower() }}</span>
-            </div>
+        <!-- Monster power -->
+        <div class="flex-1 power-orb-monster rounded-xl py-2 px-2
+                    flex flex-col items-center justify-center relative overflow-hidden">
+          <div class="font-heading text-[7px] uppercase tracking-[0.16em] text-blood-800 mb-1">
+            Monstre{{ additionalMonsters().length > 0 ? 's' : '' }}
           </div>
-        } @else {
-          <div class="flex-1 power-orb-monster rounded-2xl py-4 px-3
-                      flex flex-col items-center justify-center relative overflow-hidden">
-            <div class="font-heading text-[8px] uppercase tracking-[0.18em] text-blood-800 mb-2">
-              Monstre
-            </div>
-            <div class="text-4xl font-black text-blood-400 leading-none tabular-nums">
-              {{ monsterPower() }}
-            </div>
+          <div class="text-2xl font-black text-blood-400 leading-none tabular-nums">
+            {{ monsterPower() }}
           </div>
-        }
+        </div>
       </div>
+
+      <!-- Bonus cards on each side -->
+      @if (combatBonusCards().length > 0 || combatMonsterBonusCards().length > 0) {
+        <div class="flex gap-2 mb-2">
+          <!-- Player bonuses -->
+          <div class="flex-1 flex flex-wrap gap-1">
+            @for (c of combatBonusCards(); track c.id) {
+              <span class="font-heading text-[8px] px-1.5 py-0.5 rounded-lg
+                           bg-forest-950/70 border border-forest-800/40 text-forest-400">
+                +{{ c.power ?? 0 }} {{ c.name }}
+              </span>
+            }
+          </div>
+          <!-- Monster bonuses -->
+          <div class="flex-1 flex flex-wrap gap-1 justify-end">
+            @for (c of combatMonsterBonusCards(); track c.id) {
+              <span class="font-heading text-[8px] px-1.5 py-0.5 rounded-lg
+                           bg-blood-950/70 border border-blood-800/40 text-blood-400">
+                {{ c.name }}
+              </span>
+            }
+          </div>
+        </div>
+      }
 
       <!-- Accepted helpers tags -->
       @if (acceptedHelpers().length > 0) {
-        <div class="flex flex-wrap gap-1.5 mb-3 justify-center">
+        <div class="flex flex-wrap gap-1 mb-2 justify-center">
           @for (h of acceptedHelpers(); track h.id) {
-            <span class="font-heading text-[9px] bg-ocean-950/70 border border-ocean-800/40
-                         rounded-full px-2.5 py-0.5 text-ocean-300">
+            <span class="font-heading text-[8px] bg-ocean-950/70 border border-ocean-800/40
+                         rounded-full px-2 py-0.5 text-ocean-300">
               ✓ {{ h.name }}
             </span>
           }
@@ -107,27 +184,21 @@
       }
 
       <!-- Outcome banner -->
-      <div class="text-center text-sm font-heading font-bold mb-4 leading-snug"
+      <div class="text-center text-xs font-heading font-bold mb-3 leading-snug"
            [class]="winsWithHelpers() ? 'text-forest-400' : 'text-blood-400'">
-        @if (winsWithHelpers()) {
-          Victoire assurée ! 🏆
-        } @else {
-          Vous risquez de perdre… 💀
-        }
+        @if (winsWithHelpers()) { Victoire assurée ! 🏆 } @else { Vous risquez de perdre… 💀 }
       </div>
 
       <!-- ── Active player actions ── -->
       @if (isMyTurn()) {
 
-        <!-- FleeReaction: failed flee, must accept bad stuff -->
+        <!-- FleeReaction: failed flee -->
         @if (isFleeReaction()) {
           <div class="flex flex-col items-center gap-3">
             <div class="rounded-2xl bg-blood-950/60 border border-blood-800/40 px-4 py-3 text-center max-w-xs">
               <p class="font-heading text-xs font-bold text-blood-300 mb-1">Fuite échouée !</p>
               <p class="text-[10px] text-dungeon-500 leading-relaxed">
                 Vous devez subir les conséquences du monstre.
-                Jouez une carte de fuite automatique si vous en avez une,
-                ou acceptez les conséquences.
               </p>
             </div>
             <button (click)="resolveFlee()"
@@ -142,7 +213,7 @@
           </div>
         }
 
-        <!-- FleeSuccessReaction: fled, confirm escape -->
+        <!-- FleeSuccessReaction: fled -->
         @else if (isFleeSuccessReaction()) {
           <div class="flex flex-col items-center gap-3">
             <div class="rounded-2xl bg-forest-950/60 border border-forest-800/40 px-4 py-3 text-center max-w-xs">
@@ -183,7 +254,8 @@
                              text-ocean-300 disabled:opacity-40 transition-all
                              hover:-translate-y-0.5 active:scale-95 font-heading">
                       @if (pendingHelpTarget() === player.id) {
-                        <span class="w-3 h-3 border border-ocean-400/40 border-t-ocean-400 rounded-full animate-spin inline-block"></span>
+                        <span class="w-3 h-3 border border-ocean-400/40 border-t-ocean-400
+                                     rounded-full animate-spin inline-block"></span>
                       } @else {
                         🤝
                       }
@@ -202,30 +274,72 @@
           }
 
           <!-- Fight / Flee buttons -->
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid gap-2" [class]="monster()?.noFlee ? 'grid-cols-1' : 'grid-cols-2'">
             <button (click)="fight()"
-              class="group flex flex-col items-center gap-2 py-3.5 px-2 rounded-2xl
+              class="group flex flex-col items-center gap-1 py-2 px-2 rounded-xl
                      bg-gradient-to-b from-gold-900/55 to-gold-950/65
                      hover:from-gold-800/65 hover:to-gold-900/75
                      border border-gold-800/50 hover:border-gold-700/70
                      text-gold-300 transition-all duration-150
                      hover:-translate-y-0.5 active:scale-95">
-              <span class="text-2xl leading-none group-hover:scale-110 transition-transform duration-150">⚔</span>
-              <span class="font-heading text-xs font-bold tracking-wide">Se Battre</span>
+              <span class="text-lg leading-none group-hover:scale-110 transition-transform duration-150">⚔</span>
+              <span class="font-heading text-[10px] font-bold tracking-wide">Se Battre</span>
             </button>
 
-            <button (click)="flee()"
-              class="group flex flex-col items-center gap-2 py-3.5 px-2 rounded-2xl
-                     bg-dungeon-900/70 hover:bg-dungeon-800/80
-                     border border-dungeon-600/40 hover:border-dungeon-500/60
-                     text-dungeon-300 hover:text-dungeon-200
-                     transition-all duration-150
-                     hover:-translate-y-0.5 active:scale-95">
-              <span class="text-2xl leading-none group-hover:scale-110 transition-transform duration-150">🏃</span>
-              <span class="font-heading text-xs font-bold tracking-wide">Fuir</span>
-              <span class="font-heading text-[9px] text-dungeon-600 -mt-1">dé ≥ 5</span>
-            </button>
+            @if (!monster()?.noFlee) {
+              <button (click)="flee()"
+                class="group flex flex-col items-center gap-1 py-2 px-2 rounded-xl
+                       bg-dungeon-900/70 hover:bg-dungeon-800/80
+                       border border-dungeon-600/40 hover:border-dungeon-500/60
+                       text-dungeon-300 hover:text-dungeon-200
+                       transition-all duration-150
+                       hover:-translate-y-0.5 active:scale-95">
+                <span class="text-lg leading-none group-hover:scale-110 transition-transform duration-150">🏃</span>
+                <span class="font-heading text-[10px] font-bold tracking-wide">Fuir</span>
+                <span class="font-heading text-[8px] text-dungeon-600 -mt-0.5">dé ≥ 5</span>
+              </button>
+            }
           </div>
+
+          <!-- Bribe section (Nez Flottant) -->
+          @if (bribeValue(); as required) {
+            <div class="mt-3 rounded-2xl bg-amber-950/40 border border-amber-800/30 p-3">
+              <p class="font-heading text-[8px] uppercase tracking-[0.2em] text-amber-600 font-bold mb-2">
+                💰 Pot-de-vin — donner un objet de {{ required }} PO ou plus
+              </p>
+              @if (bribeableItems().length === 0) {
+                <p class="text-[9px] text-dungeon-600 italic text-center py-1">
+                  Aucun objet d'assez grande valeur
+                </p>
+              } @else {
+                <div class="flex flex-col gap-1 mb-2">
+                  @for (item of bribeableItems(); track item.id) {
+                    <button
+                      (click)="selectedBribeItemId.set(selectedBribeItemId() === item.id ? null : item.id)"
+                      [class.ring-1]="selectedBribeItemId() === item.id"
+                      [class.ring-amber-500]="selectedBribeItemId() === item.id"
+                      class="flex items-center justify-between px-3 py-1.5 rounded-xl
+                             bg-dungeon-950/60 border border-dungeon-700/30
+                             text-left transition-all hover:border-amber-700/50">
+                      <span class="text-[10px] text-dungeon-300 font-heading">{{ item.name }}</span>
+                      <span class="text-[9px] text-amber-500 font-mono font-bold ml-2 shrink-0">{{ item.goldValue }} PO</span>
+                    </button>
+                  }
+                </div>
+                <button
+                  (click)="bribeMonster()"
+                  [disabled]="!selectedBribeItemId()"
+                  class="w-full py-2 rounded-xl font-heading text-[10px] font-bold
+                         bg-gradient-to-b from-amber-900/60 to-amber-950/70
+                         hover:from-amber-800/70 hover:to-amber-900/80
+                         border border-amber-800/40 hover:border-amber-700/60
+                         text-amber-200 transition-all disabled:opacity-40 disabled:cursor-not-allowed
+                         hover:-translate-y-0.5 active:scale-95">
+                  💸 Corrompre et fuir
+                </button>
+              }
+            </div>
+          }
 
         }
 

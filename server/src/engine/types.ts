@@ -44,4 +44,5 @@ export type GameAction =
   | { type: 'THIEF_SWAP_TREASURES'; discardCardIds: string[] }
   | { type: 'BRIBE_MONSTER'; discardItemId: string }
   | { type: 'GIVE_ITEM'; itemId: string; targetPlayerId: string }
-  | { type: 'PICK_BODY_LOOT'; cardId: string };
+  | { type: 'PICK_BODY_LOOT'; cardId: string }
+  | { type: 'SHARE_TREASURES'; assignments: Array<{ cardId: string; toPlayerId: string }> };

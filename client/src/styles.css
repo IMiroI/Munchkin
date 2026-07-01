@@ -749,4 +749,105 @@
   .animate-monster       { animation: monster-breathe 2.8s ease-in-out infinite; }
   .animate-combat-slide  { animation: combat-slide-up 0.48s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
   .animate-entrance      { animation: entrance-fade 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+  /* ── Card spotlight (centre écran) ── */
+  @keyframes card-spotlight-enter {
+    0%   { opacity: 0; transform: scale(0.62) translateY(48px); }
+    55%  { opacity: 1; transform: scale(1.04) translateY(-5px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .animate-card-spotlight { animation: card-spotlight-enter 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+  /* ── Phase announcement (bannière haut) ── */
+  @keyframes phase-announce {
+    0%   { opacity: 0; transform: translateY(-28px) scale(0.90); }
+    18%  { opacity: 1; transform: translateY(0) scale(1); }
+    72%  { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-14px) scale(0.96); }
+  }
+  .animate-phase-announce { animation: phase-announce 2s cubic-bezier(0.34, 1.2, 0.64, 1) forwards; }
+
+  /* ── Log entry slide-in ── */
+  @keyframes log-entry-in {
+    from { opacity: 0; transform: translateX(18px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  .animate-log-entry { animation: log-entry-in 0.28s ease-out both; }
+
+  /* ── Level-orb flash (gain/perte de niveau) ── */
+  @keyframes level-change {
+    0%   { transform: scale(1); }
+    28%  { transform: scale(1.5); box-shadow: 0 0 0 6px rgba(236,196,90,0.55), 0 0 30px rgba(236,196,90,0.4); }
+    60%  { transform: scale(0.88); }
+    100% { transform: scale(1); }
+  }
+  .animate-level-change { animation: level-change 0.65s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+  /* ══════════════════════════════════════════════════════════
+     GAME ANIMATION OVERLAY (fuite / combat)
+  ══════════════════════════════════════════════════════════ */
+
+  /* Dice face */
+  .dice-face {
+    width: 108px;
+    height: 108px;
+    border-radius: 20px;
+    background: linear-gradient(160deg, #1e1628 0%, #120f1c 100%);
+    border: 3px solid rgba(212,168,60,0.5);
+    box-shadow:
+      0 0 40px rgba(212,168,60,0.2),
+      0 12px 48px rgba(0,0,0,0.85),
+      0 0 0 1px rgba(255,255,255,0.03) inset;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.25s, box-shadow 0.25s;
+  }
+
+  .dice-rolling {
+    border-color: rgba(212,168,60,0.85);
+    box-shadow:
+      0 0 70px rgba(212,168,60,0.55),
+      0 12px 48px rgba(0,0,0,0.85);
+    animation: dice-shake 0.1s ease-in-out infinite;
+  }
+
+  @keyframes dice-shake {
+    0%   { transform: rotate(-6deg) scale(0.97); }
+    25%  { transform: rotate(6deg)  scale(1.04); }
+    50%  { transform: rotate(-4deg) scale(0.98); }
+    75%  { transform: rotate(4deg)  scale(1.02); }
+    100% { transform: rotate(-6deg) scale(0.97); }
+  }
+
+  /* Overlay backdrop fade-in */
+  @keyframes anim-backdrop-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .animate-anim-backdrop { animation: anim-backdrop-in 0.22s ease-out forwards; }
+
+  /* Content enter */
+  @keyframes anim-enter {
+    from { opacity: 0; transform: scale(0.88) translateY(16px); }
+    to   { opacity: 1; transform: scale(1)    translateY(0); }
+  }
+  .animate-anim-enter { animation: anim-enter 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+  /* Victory sword bounce */
+  @keyframes victory-icon {
+    0%   { transform: scale(0.4) rotate(-15deg); opacity: 0; }
+    55%  { transform: scale(1.2) rotate(8deg); opacity: 1; }
+    75%  { transform: scale(0.95) rotate(-3deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+  .animate-victory-icon { animation: victory-icon 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+  /* Defeat skull drop */
+  @keyframes defeat-icon {
+    0%   { transform: translateY(-30px) scale(0.5); opacity: 0; }
+    60%  { transform: translateY(4px) scale(1.05); opacity: 1; }
+    100% { transform: translateY(0) scale(1); }
+  }
+  .animate-defeat-icon { animation: defeat-icon 0.6s cubic-bezier(0.34, 1.2, 0.64, 1) forwards; }
 }

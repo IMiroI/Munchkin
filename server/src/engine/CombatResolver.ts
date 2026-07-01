@@ -3,7 +3,7 @@ import { playerRace, playerRaces, playerClass, playerClasses } from '@munchkin/s
 import type { CombatResult, LevelChange } from './types.js';
 import { DeckManager } from './DeckManager.js';
 
-function equipmentBonus(player: Player): number {
+export function equipmentBonus(player: Player): number {
   const race = playerRace(player);
   const races = playerRaces(player);
   const classes = playerClasses(player);
@@ -31,7 +31,7 @@ function equipmentBonus(player: Player): number {
 }
 
 /** Warrior class: +1 per level above 5, minimum 0. */
-function classBonus(player: Player): number {
+export function classBonus(player: Player): number {
   return playerClasses(player).includes('warrior') ? Math.max(0, player.level - 5) : 0;
 }
 

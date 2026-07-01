@@ -500,7 +500,7 @@ const DOOR_CARDS: readonly Card[] = [
     effect: 'Vous pouvez porter autant de Gros objets que vous voulez. Vous pouvez avoir 6 cartes dans votre main.',
   },
   {
-    id: 'd-067', name: 'Nain', type: CardType.Race, raceId: 'dwarf',
+    id: 'd-067', name: 'Nain', type: CardType.Race, raceId: 'dwarf', image: '/cards/porte_066.jpg',
     raceUnlimitedBigItems: true, raceHandSizeBonus: 1,
     effect: 'Vous pouvez porter autant de Gros objets que vous voulez. Vous pouvez avoir 6 cartes dans votre main.',
   },
