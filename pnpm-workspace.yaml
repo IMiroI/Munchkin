@@ -1,0 +1,21 @@
+packages:
+  - client
+  - server
+  - shared
+
+# Quarantaine : refuse toute version publiée depuis moins de 7 jours (10080 min).
+minimumReleaseAge: 10080
+
+# Remplace le legacy-peer-deps=true de l'ancien .npmrc npm.
+strictPeerDependencies: false
+
+# Allowlist des scripts d'installation — bloqués par défaut depuis pnpm 10.
+# Liste établie à partir du rapport réel de `pnpm install` sur ce workspace.
+allowBuilds:
+  esbuild: true # binaire de plateforme (builder Angular côté client, tsx côté server)
+  prisma: true # CLI Prisma : télécharge les moteurs de requête/migration
+  "@prisma/client": true # génération du client
+  "@prisma/engines": true # place les moteurs — sans eux, aucune requête ne passe
+  "@parcel/watcher": true # surveillance de fichiers native (ng serve) — sinon repli sur du polling
+  lmdb: true # cache de build Angular sur disque
+  msgpackr-extract: true # accélérateur natif de lmdb

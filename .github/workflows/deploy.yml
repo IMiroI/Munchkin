@@ -63,4 +63,4 @@ jobs:
             cd /opt/vgames-suite
             docker compose -f docker-compose.prod.yml pull munchkin-web munchkin-api
             docker compose -f docker-compose.prod.yml up -d munchkin-web munchkin-api
-            docker compose -f docker-compose.prod.yml exec -T munchkin-api npx prisma migrate deploy
+            docker compose -f docker-compose.prod.yml exec -T munchkin-api ./node_modules/.bin/prisma migrate deploy

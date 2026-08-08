@@ -1,17 +1,21 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 
-COPY package*.json tsconfig.base.json ./
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY server/package.json server/package.json
 COPY shared/package.json shared/package.json
 COPY client/package.json client/package.json
-RUN npm ci
+# `--filter @munchkin/server...` : le suffixe `...` embarque @munchkin/shared, dépendance interne.
+# Le client n'est pas installé ici — inutile pour l'image serveur.
+RUN pnpm install --frozen-lockfile --filter @munchkin/server...
 
 COPY shared shared
 COPY server server
-RUN npm run build -w @munchkin/shared
-RUN npm run build -w @munchkin/server
-RUN npm run db:generate -w @munchkin/server
+RUN pnpm --filter @munchkin/shared build
+RUN pnpm --filter @munchkin/server build
+RUN pnpm --filter @munchkin/server db:generate
 
 FROM node:22-alpine
 WORKDIR /app

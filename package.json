@@ -2,12 +2,12 @@
   "name": "munchkin",
   "version": "1.0.0",
   "private": true,
-  "workspaces": ["client", "server", "shared"],
+  "packageManager": "pnpm@11.20.0",
   "scripts": {
-    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w @munchkin/server\" \"npm run dev -w @munchkin/client\"",
-    "build": "npm run build -w @munchkin/shared && concurrently \"npm run build -w @munchkin/server\" \"npm run build -w @munchkin/client\"",
-    "test": "npm run test -w @munchkin/client",
-    "lint": "npm run lint -w @munchkin/server && npm run lint -w @munchkin/client"
+    "dev": "concurrently -n server,client -c blue,green \"pnpm --filter @munchkin/server dev\" \"pnpm --filter @munchkin/client dev\"",
+    "build": "pnpm --filter @munchkin/shared build && concurrently \"pnpm --filter @munchkin/server build\" \"pnpm --filter @munchkin/client build\"",
+    "test": "pnpm --filter @munchkin/client test",
+    "lint": "pnpm --filter @munchkin/server lint && pnpm --filter @munchkin/client lint"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

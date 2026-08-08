@@ -58,14 +58,9 @@ $needInstall = -not (Test-Path "$root\server\node_modules")
 if ($needInstall) {
     Write-Host "  Premiere installation (2-3 min)..." -ForegroundColor Yellow
 
-    Push-Location "$root\shared";  npm install;  $c1 = $LASTEXITCODE;  Pop-Location
-    Assert-LastExit "npm install shared ($c1)"
-
-    Push-Location "$root\server";  npm install;  $c2 = $LASTEXITCODE;  Pop-Location
-    Assert-LastExit "npm install server ($c2)"
-
-    Push-Location "$root\client";  npm install;  $c3 = $LASTEXITCODE;  Pop-Location
-    Assert-LastExit "npm install client ($c3)"
+    # Workspace pnpm : un seul install a la racine couvre shared + server + client.
+    Push-Location $root;  pnpm install --frozen-lockfile;  $c1 = $LASTEXITCODE;  Pop-Location
+    Assert-LastExit "pnpm install ($c1)"
 
     Write-Host "  [OK] Dependances installees" -ForegroundColor Green
 } else {
@@ -75,7 +70,7 @@ if ($needInstall) {
 # Build shared si dist absent
 if (-not (Test-Path "$root\shared\dist\index.js")) {
     Write-Host "  Build du module shared..." -ForegroundColor Yellow
-    Push-Location "$root\shared";  npx tsc;  $c = $LASTEXITCODE;  Pop-Location
+    Push-Location "$root\shared";  pnpm exec tsc;  $c = $LASTEXITCODE;  Pop-Location
     Assert-LastExit "tsc shared ($c)"
     Write-Host "  [OK] Shared compile" -ForegroundColor Green
 } else {
@@ -93,11 +88,11 @@ if (-not (Test-Path $setupFlag)) {
     Push-Location "$root\server"
 
     # migrate deploy : non-interactif, applique les migrations existantes
-    npx prisma migrate deploy
+    pnpm exec prisma migrate deploy
     $c1 = $LASTEXITCODE
 
     if ($c1 -eq 0) {
-        npm run db:seed
+        pnpm db:seed
         $c2 = $LASTEXITCODE
     }
 
@@ -116,8 +111,8 @@ if (-not (Test-Path $setupFlag)) {
 # â”€â”€ 4. Lancement â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 Write-Banner "[4/4] Lancement serveur + client"
 
-$serverCmd = "& { `$host.UI.RawUI.WindowTitle = 'Munchkin - Serveur'; Set-Location '$root\server'; npm run dev }"
-$clientCmd = "& { `$host.UI.RawUI.WindowTitle = 'Munchkin - Client'; Set-Location '$root\client'; npm run dev }"
+$serverCmd = "& { `$host.UI.RawUI.WindowTitle = 'Munchkin - Serveur'; Set-Location '$root\server'; pnpm dev }"
+$clientCmd = "& { `$host.UI.RawUI.WindowTitle = 'Munchkin - Client'; Set-Location '$root\client'; pnpm dev }"
 
 Start-Process powershell -ArgumentList "-NoExit", "-NoProfile", "-Command", $serverCmd
 Start-Sleep 3
