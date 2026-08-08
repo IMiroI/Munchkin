@@ -1,6 +1,16 @@
 {
-  "extends": "../tsconfig.base.json",
+  // Volontairement autonome (pas d'extends "../tsconfig.base.json") : ce dossier est aussi
+  // récupéré seul via une dépendance git pnpm par Munchkin3D, qui n'a pas le reste du repo.
   "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
     "outDir": "./dist",
     "rootDir": "./src",
     "composite": true
